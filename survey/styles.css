@@ -280,3 +280,16 @@ input[type="color"]::-webkit-color-swatch { border: none; border-radius: 4px; }
   background: rgba(0,0,0,.75); color: #fff; font-size: 14px; line-height: 1; cursor: pointer;
 }
 .file-item .rm:hover { background: var(--accent); color: var(--on-accent); }
+
+/* Payment */
+.payment { padding: 28px 32px 32px; }
+.pay-summary { border: 1px solid var(--line-2); border-radius: var(--radius-sm); background: var(--bg); padding: 6px 16px; margin: 4px 0 20px; }
+.pay-row { display: flex; justify-content: space-between; gap: 16px; padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.pay-row:last-child { border-bottom: 0; }
+.pay-row strong { font-size: 18px; color: var(--text); }
+.pay-row.muted { color: var(--text-3); }
+.pay-row.muted span:last-child { text-align: right; color: var(--text-2); }
+.paypal-box { max-width: 420px; margin: 0 auto; min-height: 48px; }
+.pay-notice { padding: 14px 16px; border: 1px solid var(--accent-line); background: var(--accent-dim); border-radius: var(--radius-sm); font-size: 14px; color: var(--text-2); text-align: center; }
+#payStatus { text-align: center; margin-top: 14px; }
+@media (max-width: 640px) { .payment { padding: 22px 18px; } .pay-row { flex-direction: column; gap: 4px; } .pay-row.muted span:last-child { text-align: left; } }

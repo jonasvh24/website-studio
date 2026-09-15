@@ -9,6 +9,16 @@ window.SURVEY_CONFIG = {
   endpoint: '',
   // Shown to the customer as the address to email the file to.
   contactEmail: 'arno.van.huyssteen@adroitconsult.eu',
+  // Payment: one-time charge before the request is submitted.
+  payment: {
+    enabled: true,
+    provider: 'paypal',
+    clientId: '',            // PayPal REST app Client ID (developer.paypal.com, Live). Leave empty to show "not set up" to customers.
+    amount: '250.00',
+    currency: 'EUR',
+    description: 'Website design and build, one-time fee',
+    sandbox: false           // true = use PayPal sandbox with a sandbox Client ID
+  },
   // Upload limits
   maxFiles: 12,
   maxImageEdge: 1600,

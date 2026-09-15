@@ -7,7 +7,7 @@
   <meta name="description" content="Request form for a new website.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=5">
+  <link rel="stylesheet" href="styles.css?v=6">
 </head>
 <body>
   <main class="page">
@@ -211,13 +211,34 @@
       </section>
 
       <div class="actions">
-        <p class="fineprint">Submitting saves a JSON file to your device. Send it to us by email to start the project.</p>
+        <p class="fineprint" id="submitNote">The website is a one-time fee of <strong id="feeInline">250 EUR</strong>, paid in the next step with PayPal. Your request is sent after payment.</p>
         <button type="submit" class="btn btn-primary" id="submitBtn">
-          <span>Submit request</span>
+          <span>Continue to payment</span>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
         </button>
       </div>
     </form>
+
+    <!-- PAYMENT -->
+    <section id="payment" class="glass payment" hidden>
+      <div class="section-head">
+        <span class="step-num">06</span>
+        <div>
+          <h2>Payment</h2>
+          <p>One-time fee. Your request is sent as soon as the payment is confirmed.</p>
+        </div>
+      </div>
+      <div class="pay-summary">
+        <div class="pay-row"><span>Website design and build</span><strong id="feeAmount">250.00 EUR</strong></div>
+        <div class="pay-row muted"><span>Client</span><span id="payClient"></span></div>
+        <div class="pay-row muted"><span>Includes</span><span>Responsive website, all files delivered as a ZIP, one revision round</span></div>
+      </div>
+      <div id="paypalButtons" class="paypal-box"></div>
+      <p class="fineprint" id="payStatus"></p>
+      <div class="success-actions">
+        <button type="button" class="btn btn-ghost" id="payBack">Back to the form</button>
+      </div>
+    </section>
 
     <!-- SUCCESS -->
     <section id="success" class="glass success" hidden>
@@ -226,6 +247,7 @@
       </div>
       <h2>Request saved</h2>
       <p id="successMain">Thanks, <strong id="successName"></strong>. Your request has been sent.</p>
+      <p class="muted" id="successPay" hidden></p>
       <p class="muted" id="successSub">A copy, <code id="successFile"></code>, has been downloaded to your device. We will reply to <strong id="successEmail"></strong>.</p>
       <div class="success-actions">
         <button type="button" class="btn btn-ghost" id="downloadAgain">Download JSON again</button>
@@ -246,7 +268,7 @@
     <input type="text" name="bot-field">
   </form>
 
-  <script src="config.js?v=5"></script>
-  <script src="survey.js?v=5"></script>
+  <script src="config.js?v=6"></script>
+  <script src="survey.js?v=6"></script>
 </body>
 </html>

@@ -35,5 +35,12 @@
     "siteId": "",
     "formName": "website-request",
     "pollSeconds": 60
+  },
+  "paypal": {
+    "clientId": "",
+    "clientSecret": "",
+    "sandbox": false,
+    "expectedAmount": "250.00",
+    "expectedCurrency": "EUR"
   }
 }

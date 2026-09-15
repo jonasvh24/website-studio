@@ -488,3 +488,4 @@ select.version { padding: 7px 10px; font-size: 13px; width: auto; }
 .file-tile img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; }
 .file-tile .doc { display: grid; place-items: center; aspect-ratio: 4 / 3; font-weight: 700; font-size: 12px; color: var(--accent); }
 .file-tile .fname { padding: 5px 7px; font-size: 11px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tag.unpaid { background: transparent; color: var(--text-3); border-style: dashed; }

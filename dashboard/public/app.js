@@ -30,6 +30,14 @@
 
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const initials = (name) => (name || '?').split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase();
+  const payTag = (r) => {
+    const p = r.payment;
+    if (!p) return '<span class="tag unpaid">Unpaid</span>';
+    const amt = `${Number(p.amount || 0).toFixed(2)} ${p.currency || ''}`.trim();
+    if (p.verified === true) return `<span class="tag green">Paid ${esc(amt)}, verified</span>`;
+    if (p.verified === false) return `<span class="tag unpaid">Payment not verified</span>`;
+    return `<span class="tag green">Paid ${esc(amt)}${p.sandbox ? ' (sandbox)' : ''}</span>`;
+  };
   const fmtDate = (iso) => iso ? new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : '';
 
   async function api(path, opts = {}) {
@@ -149,6 +157,7 @@
           <div>
             <div class="name">${esc(r.client.fullName)}
               <span class="tag">${esc(r.website.type || 'Website')}</span>
+              ${payTag(r)}
               ${built ? `<span class="tag green">${built} build${built > 1 ? 's' : ''}</span>` : ''}
             </div>
             <div class="sub">${esc(r.client.email)}${r.client.title ? ', ' + esc(r.client.title) : ''}${r.client.location ? ', ' + esc(r.client.location) : ''}</div>
@@ -269,6 +278,19 @@
         <p class="prose ${r.extraNotes ? '' : 'empty-val'}">${esc(r.extraNotes || 'None')}</p>
       </div>
       <div class="review-block">
+        <h3>Payment</h3>
+        ${r.payment ? `<dl class="kv">
+          <dt>Status</dt><dd>${payTag(r)}</dd>
+          ${kv('Amount', `${Number(r.payment.amount || 0).toFixed(2)} ${r.payment.currency || ''}`)}
+          ${kv('PayPal order', r.payment.orderId)}
+          ${kv('Capture', r.payment.captureId)}
+          ${kv('Payer', [r.payment.payerName, r.payment.payerEmail].filter(Boolean).join(', '))}
+          ${kv('Paid at', fmtDate(r.payment.paidAt))}
+          ${r.payment.verifyReason ? `<dt>Check</dt><dd>${esc(r.payment.verifyReason)}</dd>` : ''}
+        </dl>
+        <div class="toolbar" style="margin-top:12px"><button class="btn btn-sm" id="verifyPayBtn">Verify with PayPal</button></div>` : '<p class="prose empty-val">No payment recorded. The customer did not complete the PayPal step.</p>'}
+      </div>
+      <div class="review-block">
         <h3>Domain</h3>
         <dl class="kv">
           ${kv('Existing domain', r.domain?.name)}
@@ -289,6 +311,16 @@
         <div id="bizBody"><span class="empty-val">Loading</span></div>
       </div>`;
     renderBusiness();
+    const vb = $('#verifyPayBtn');
+    if (vb) vb.onclick = async () => {
+      vb.disabled = true; vb.textContent = 'Checking';
+      try {
+        const { payment } = await api(`/api/requests/${r.id}/verify-payment`, { method: 'POST' });
+        state.current.payment = payment;
+        toast(payment.verified ? 'Payment verified with PayPal' : `Not verified: ${payment.verifyReason || 'unknown'}`, !payment.verified);
+        renderReview();
+      } catch (err) { toast(err.message, true); vb.disabled = false; vb.textContent = 'Verify with PayPal'; }
+    };
   }
 
   // ── Business lookup (Google Places) ───────────────────────

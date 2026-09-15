@@ -33,6 +33,7 @@ const { generateSite } = require('./lib/template');
 const llm = require('./lib/llm');
 const places = require('./lib/places');
 const { Inbox } = require('./lib/inbox');
+const paypal = require('./lib/paypal');
 
 const ROOT = __dirname;
 const PUBLIC = path.join(ROOT, 'public');
@@ -112,6 +113,7 @@ function normalizeRequest(raw) {
   r.business = r.business || { name: r.businessName || '', location: r.businessLocation || '', usePublicData: r.usePublicData !== false };
   r.domain = r.domain || { name: r.domainName || '', registrar: r.domainRegistrar || '', canGiveAccess: !!r.domainAccess };
   r.files = Array.isArray(r.files) ? r.files : [];
+  r.payment = r.payment && typeof r.payment === 'object' ? r.payment : null;
   r.extraNotes = r.extraNotes || '';
   if (!r.client.fullName || !r.client.email) throw new Error('Request needs client.fullName and client.email');
   if (!r.id || !safeId(r.id)) r.id = `req_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -167,6 +169,14 @@ async function importRequest(raw, meta = {}) {
     files.push(entry);
   }
   r.files = files;
+  if (r.payment && paypal.isConfigured(config)) {
+    try {
+      const v = await paypal.verifyPayment(config, r.payment, { amount: config.paypal?.expectedAmount, currency: config.paypal?.expectedCurrency });
+      r.payment = { ...r.payment, verified: v.verified, verifiedAt: new Date().toISOString(), verifyReason: v.reason || '', verifiedStatus: v.status || '' };
+    } catch (err) {
+      r.payment = { ...r.payment, verified: null, verifyReason: err.message };
+    }
+  }
   r.importedAt = new Date().toISOString();
   r.importSource = meta.source || 'api';
   if (meta.file) r.importFile = meta.file;
@@ -356,7 +366,7 @@ const server = http.createServer(async (req, res) => {
   try {
     // API
     if (p === '/api/status' && req.method === 'GET') {
-      return send(res, 200, { ok: true, providers: await llm.providersStatus(config), places: places.isConfigured(config), config: { ollamaModel: config.ollama.model, port: PORT } });
+      return send(res, 200, { ok: true, providers: await llm.providersStatus(config), places: places.isConfigured(config), paypalVerify: paypal.isConfigured(config), config: { ollamaModel: config.ollama.model, port: PORT } });
     }
     if (p === '/api/requests' && req.method === 'GET') return send(res, 200, await listRequests());
     if (p === '/api/inbox' && req.method === 'GET') return send(res, 200, inbox.status());
@@ -389,6 +399,16 @@ const server = http.createServer(async (req, res) => {
         await fsp.rm(path.join(UPLOADS, id), { recursive: true, force: true });
         return send(res, 200, { ok: true });
       }
+    }
+    if ((m = p.match(/^\/api\/requests\/([\w\-]+)\/verify-payment$/)) && req.method === 'POST') {
+      const r = await getRequest(m[1]);
+      if (!r) return send(res, 404, { error: 'Request not found' });
+      if (!r.payment) return send(res, 400, { error: 'No payment recorded on this request' });
+      if (!paypal.isConfigured(config)) return send(res, 400, { error: 'PayPal credentials not configured. Add paypal.clientId and paypal.clientSecret to config.local.json.' });
+      const v = await paypal.verifyPayment(config, r.payment, { amount: config.paypal?.expectedAmount, currency: config.paypal?.expectedCurrency });
+      r.payment = { ...r.payment, verified: v.verified, verifiedAt: new Date().toISOString(), verifyReason: v.reason || '', verifiedStatus: v.status || '' };
+      await saveRequest(r);
+      return send(res, 200, { payment: r.payment });
     }
     if ((m = p.match(/^\/api\/requests\/([\w\-]+)\/build$/)) && req.method === 'POST') return handleBuild(req, res, m[1]);
     if ((m = p.match(/^\/api\/requests\/([\w\-]+)\/builds$/)) && req.method === 'GET') return send(res, 200, await listBuilds(m[1]));

@@ -277,18 +277,99 @@
     return null;
   }
 
+  // ── Payment (PayPal Smart Buttons) ─────────────────────────
+  const PAY = Object.assign({ enabled: false, provider: 'paypal', clientId: '', amount: '250.00', currency: 'EUR', description: 'Website build', sandbox: false }, CFG.payment || {});
+  const payPanel = document.getElementById('payment');
+  const fmtMoney = (a, c) => `${Number(a).toFixed(2)} ${c}`;
+  let pendingRequest = null;
+  let paypalLoaded = null;
+
+  if (PAY.enabled) {
+    $('#feeAmount').textContent = fmtMoney(PAY.amount, PAY.currency);
+    $('#feeInline').textContent = fmtMoney(PAY.amount, PAY.currency);
+  } else {
+    $('#submitNote').textContent = 'Submitting saves a JSON file to your device and sends your request to us.';
+    $('#submitBtn').querySelector('span').textContent = 'Submit request';
+  }
+
+  function loadPayPal() {
+    if (paypalLoaded) return paypalLoaded;
+    paypalLoaded = new Promise((resolve, reject) => {
+      if (window.paypal) return resolve(window.paypal);
+      const sc = document.createElement('script');
+      const host = PAY.sandbox ? 'https://www.sandbox.paypal.com' : 'https://www.paypal.com';
+      sc.src = `${host}/sdk/js?client-id=${encodeURIComponent(PAY.clientId)}&currency=${encodeURIComponent(PAY.currency)}&intent=capture&disable-funding=credit`;
+      sc.onload = () => resolve(window.paypal);
+      sc.onerror = () => reject(new Error('Could not load PayPal'));
+      document.head.appendChild(sc);
+    });
+    return paypalLoaded;
+  }
+
+  async function showPayment(req) {
+    pendingRequest = req;
+    form.hidden = true;
+    payPanel.hidden = false;
+    $('#payClient').textContent = `${req.client.fullName} (${req.client.email})`;
+    $('#payStatus').textContent = '';
+    payPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+    const box = $('#paypalButtons');
+    if (!PAY.clientId) {
+      box.innerHTML = '<div class="pay-notice">Online payment is not set up yet. Please contact us to complete your order.</div>';
+      return;
+    }
+    box.innerHTML = '';
+    try {
+      const paypal = await loadPayPal();
+      paypal.Buttons({
+        style: { layout: 'vertical', color: 'black', shape: 'rect', label: 'pay', height: 48 },
+        createOrder: (data, actions) => actions.order.create({
+          intent: 'CAPTURE',
+          purchase_units: [{
+            reference_id: req.id,
+            custom_id: req.id,
+            description: PAY.description,
+            amount: { currency_code: PAY.currency, value: String(PAY.amount) }
+          }],
+          application_context: { shipping_preference: 'NO_SHIPPING', brand_name: 'Website request' }
+        }),
+        onApprove: async (data, actions) => {
+          $('#payStatus').textContent = 'Confirming payment';
+          const details = await actions.order.capture();
+          const cap = details.purchase_units?.[0]?.payments?.captures?.[0] || {};
+          req.payment = {
+            provider: 'paypal',
+            status: cap.status || details.status || 'COMPLETED',
+            orderId: details.id || data.orderID,
+            captureId: cap.id || '',
+            amount: cap.amount?.value || String(PAY.amount),
+            currency: cap.amount?.currency_code || PAY.currency,
+            payerEmail: details.payer?.email_address || '',
+            payerName: [details.payer?.name?.given_name, details.payer?.name?.surname].filter(Boolean).join(' '),
+            paidAt: cap.create_time || new Date().toISOString(),
+            sandbox: !!PAY.sandbox
+          };
+          await finishSubmission(req);
+        },
+        onCancel: () => { $('#payStatus').textContent = 'Payment cancelled. You can try again or go back to the form.'; },
+        onError: (err) => { console.error(err); $('#payStatus').textContent = 'Payment failed. Please try again or contact us.'; }
+      }).render('#paypalButtons');
+    } catch (err) {
+      box.innerHTML = `<div class="pay-notice">${escapeHtml(err.message)}. Please try again later or contact us.</div>`;
+    }
+  }
+
+  $('#payBack').addEventListener('click', () => {
+    payPanel.hidden = true;
+    form.hidden = false;
+    $('#submitBtn').disabled = false;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+
   // ── Submit ──────────────────────────────────────────────────
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    if (!validate()) return;
-
-    const btn = $('#submitBtn');
-    btn.disabled = true;
-    btn.querySelector('span').textContent = 'Sending';
-
-    const req = collect();
+  async function finishSubmission(req) {
     lastRequest = req;
-
     saveLocal(req);
 
     let sent = null, sendError = null;
@@ -307,13 +388,36 @@
       $('#successMain').innerHTML = `Thanks, <strong>${escapeHtml(req.client.fullName)}</strong>. Your request file has been downloaded.`;
       $('#successSub').innerHTML = `${sendError ? 'Automatic sending did not work, so please' : 'Please'} send <code>${escapeHtml(fileNameFor(req))}</code> to us.${escapeHtml(emailNote)} We will reply to <strong>${escapeHtml(req.client.email)}</strong>.`;
     }
+    const sp = $('#successPay');
+    if (req.payment) {
+      sp.hidden = false;
+      sp.innerHTML = `Payment of <strong>${escapeHtml(fmtMoney(req.payment.amount, req.payment.currency))}</strong> received. PayPal order <code>${escapeHtml(req.payment.orderId)}</code>. A receipt is sent by PayPal.`;
+    } else { sp.hidden = true; }
 
+    payPanel.hidden = true;
     form.hidden = true;
     success.hidden = false;
     success.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
+    const btn = $('#submitBtn');
     btn.disabled = false;
-    btn.querySelector('span').textContent = 'Submit request';
+    btn.querySelector('span').textContent = PAY.enabled ? 'Continue to payment' : 'Submit request';
+  }
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!validate()) return;
+
+    const btn = $('#submitBtn');
+    btn.disabled = true;
+
+    const req = collect();
+    if (PAY.enabled) {
+      await showPayment(req);
+      return;
+    }
+    btn.querySelector('span').textContent = 'Sending';
+    await finishSubmission(req);
   });
 
   $('#downloadAgain').addEventListener('click', () => lastRequest && download(lastRequest));
@@ -322,7 +426,9 @@
     form.reset();
     files.length = 0; renderFiles();
     counter.textContent = '0 characters';
+    pendingRequest = null;
     success.hidden = true;
+    payPanel.hidden = true;
     form.hidden = false;
     window.scrollTo({ top: 0, behavior: 'smooth' });
   });
