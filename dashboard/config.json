@@ -16,5 +16,11 @@
     "apiKey": "",
     "temperature": 0.4,
     "maxTokens": 8192
+  },
+  "googlePlaces": {
+    "apiKey": "",
+    "maxPhotos": 6,
+    "maxReviews": 5,
+    "photoMaxWidth": 1400
   }
 }

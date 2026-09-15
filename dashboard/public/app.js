@@ -13,6 +13,7 @@
     version: null,       // selected build version for preview
     feedback: '',        // rebuild feedback carried into the build step
     building: false,
+    business: null,
     maxStep: 1           // furthest step reachable
   };
 
@@ -130,6 +131,7 @@
     state.current = await api(`/api/requests/${id}`);
     state.version = state.current.builds?.at(-1)?.version || null;
     state.feedback = '';
+    state.business = null;
     renderList();
   }
 
@@ -227,7 +229,105 @@
       <div class="review-block">
         <h3>Extra notes</h3>
         <p class="prose ${r.extraNotes ? '' : 'empty-val'}">${esc(r.extraNotes || 'None')}</p>
+      </div>
+      <div class="review-block full" id="bizBlock">
+        <h3>Business listing</h3>
+        <div id="bizBody"><span class="empty-val">Loading</span></div>
       </div>`;
+    renderBusiness();
+  }
+
+  // ── Business lookup (Google Places) ───────────────────────
+  async function renderBusiness() {
+    const r = state.current, bz = r.business || {};
+    const body = $('#bizBody');
+    if (!body) return;
+    let info;
+    try { info = await api(`/api/requests/${r.id}/business`); }
+    catch (err) { body.innerHTML = `<span class="empty-val">${esc(err.message)}</span>`; return; }
+    state.business = info.business;
+
+    const surveyLine = `<dl class="kv">
+        ${kv('Name (survey)', bz.name)}
+        ${kv('Location (survey)', bz.location)}
+        <dt>Public data</dt><dd>${bz.usePublicData === false ? 'Client declined use of reviews and photos' : 'Client allowed use of public reviews and photos'}</dd>
+      </dl>`;
+
+    if (bz.usePublicData === false) { body.innerHTML = surveyLine; return; }
+
+    if (!info.configured) {
+      body.innerHTML = `${surveyLine}
+        <p class="biz-note">No Google Places API key configured. Add <code>googlePlaces.apiKey</code> to <code>dashboard/config.json</code> to pull reviews and photos.</p>`;
+      return;
+    }
+
+    const b = info.business;
+    if (b) {
+      body.innerHTML = `${surveyLine}
+        <div class="biz-attached">
+          <div class="biz-head">
+            <div>
+              <div class="biz-name">${esc(b.name)} <span class="tag green">Attached</span></div>
+              <div class="sub">${esc(b.type || '')}${b.type ? '. ' : ''}${esc(b.address)}</div>
+              <div class="sub">${b.rating ? `Rating ${esc(b.rating)} / 5 from ${esc(b.reviewCount)} reviews. ` : ''}${b.reviews.length} review(s) and ${b.photos.length} photo(s) will be used.</div>
+            </div>
+            <div class="toolbar">
+              <button class="btn btn-sm" id="bizChangeBtn">Change</button>
+              <button class="btn btn-sm btn-ghost" id="bizRemoveBtn">Remove</button>
+            </div>
+          </div>
+          ${b.photos.length ? `<div class="biz-photos">${b.photos.map(p => `<img src="/business/${esc(r.id)}/photos/${esc(p.file)}" alt="">`).join('')}</div>` : ''}
+          ${b.reviews.length ? `<div class="biz-reviews">${b.reviews.map(rv => `<div class="biz-review"><strong>${esc(rv.author)}</strong> <span class="stars">${'&#9733;'.repeat(Math.round(rv.rating || 0))}</span><p>${esc(rv.text)}</p></div>`).join('')}</div>` : ''}
+        </div>`;
+      $('#bizChangeBtn').onclick = () => bizSearchUI(body, surveyLine);
+      $('#bizRemoveBtn').onclick = async () => {
+        await api(`/api/requests/${r.id}/business`, { method: 'DELETE' });
+        toast('Business data removed'); renderBusiness();
+      };
+      return;
+    }
+    bizSearchUI(body, surveyLine);
+  }
+
+  function bizSearchUI(body, surveyLine) {
+    const r = state.current, bz = r.business || {};
+    const q = [bz.name, bz.location].filter(Boolean).join(', ');
+    body.innerHTML = `${surveyLine}
+      <div class="biz-search">
+        <input type="text" id="bizQuery" value="${esc(q)}" placeholder="Business name, city">
+        <button class="btn btn-sm btn-primary" id="bizFindBtn">Find business</button>
+      </div>
+      <div id="bizResults"></div>`;
+    const run = async () => {
+      const query = $('#bizQuery').value.trim();
+      if (!query) return toast('Enter a business name', true);
+      const btn = $('#bizFindBtn'); btn.disabled = true; btn.textContent = 'Searching';
+      $('#bizResults').innerHTML = '';
+      try {
+        const { candidates } = await api(`/api/business/search?q=${encodeURIComponent(query)}`);
+        if (!candidates.length) { $('#bizResults').innerHTML = '<p class="biz-note">No matching listing found. Try adding the city or street.</p>'; return; }
+        $('#bizResults').innerHTML = `<div class="biz-cands">${candidates.map(c => `
+          <div class="biz-cand">
+            <div>
+              <div class="biz-name">${esc(c.name)}</div>
+              <div class="sub">${esc(c.type || '')}${c.type ? '. ' : ''}${esc(c.address)}</div>
+              <div class="sub">${c.rating ? `Rating ${esc(c.rating)} / 5, ${esc(c.reviewCount)} reviews` : 'No rating yet'}</div>
+            </div>
+            <button class="btn btn-sm btn-primary" data-place="${esc(c.placeId)}">Use this</button>
+          </div>`).join('')}</div>`;
+        $$('#bizResults [data-place]').forEach(b => b.onclick = async () => {
+          b.disabled = true; b.textContent = 'Fetching reviews and photos';
+          try {
+            await api(`/api/requests/${r.id}/business`, { method: 'POST', body: JSON.stringify({ placeId: b.dataset.place }) });
+            toast('Business data attached'); renderBusiness();
+          } catch (err) { toast(err.message, true); b.disabled = false; b.textContent = 'Use this'; }
+        });
+      } catch (err) { $('#bizResults').innerHTML = `<p class="biz-note">${esc(err.message)}</p>`; }
+      finally { btn.disabled = false; btn.textContent = 'Find business'; }
+    };
+    $('#bizFindBtn').onclick = run;
+    $('#bizQuery').addEventListener('keydown', (e) => { if (e.key === 'Enter') run(); });
+    if (q && !state.business) run();  // auto-search on first visit when the survey gave a name
   }
 
   $('#deleteBtn').addEventListener('click', async () => {
@@ -247,6 +347,10 @@
     $('#buildDesc').textContent = n
       ? `Version ${n} exists. Building again creates version ${n + 1}; earlier versions stay available in the preview.`
       : 'The local model will generate a complete responsive site (HTML + CSS + JS) from everything the client provided.';
+    const bz = state.business;
+    $('#bizLine').textContent = bz && r.business?.usePublicData !== false
+      ? `Business listing attached: ${bz.name}. ${bz.reviews.length} review(s) and ${bz.photos.length} photo(s) will be used.`
+      : (r.business?.name ? 'No business listing attached. Go back to Review to find it, or build without it.' : '');
     $('#feedbackBox').hidden = !state.feedback;
     $('#feedbackText').textContent = state.feedback;
     $('#buildBtn').querySelector('span').textContent = n ? 'Rebuild Website' : 'Build Website';

@@ -24,6 +24,7 @@ website-studio/
 │   ├── public/              # dashboard UI
 │   └── data/
 │       ├── requests/        # imported requests, one JSON per client
+│       ├── business/<id>/   # fetched Google listing + photos
 │       └── builds/<id>/vN/  # generated sites, versioned
 └── start.sh
 ```
@@ -53,6 +54,7 @@ The client sends you the JSON file (or you collect it however you like).
   "client":  { "fullName", "email", "location", "title", "bio" },
   "website": { "type", "description", "stylePreferences": [], "colorPreference" },
   "social":  { "github", "linkedin", "twitter", "currentWebsite" },
+  "business": { "name", "location", "usePublicData": true },
   "extraNotes": "",
   "meta": { "userAgent", "language", "source": "public-survey" }
 }
@@ -80,6 +82,29 @@ The client sends you the JSON file (or you collect it however you like).
 ### About "Load from browser storage"
 
 `localStorage` is per-origin, so the dashboard can only read `website_requests` written by a survey served from the **same origin**. The dashboard serves a copy of the survey at <http://localhost:4321/survey/> — fill it there and *Load from browser storage* works. For surveys hosted elsewhere, use the downloaded JSON file.
+
+### Business reviews and photos (Google Places)
+
+If the client entered a business name, the Review step shows a **Business listing** block. Click **Find business**, pick the right listing, and the dashboard pulls:
+
+- rating, review count, up to 5 reviews (author, stars, text)
+- address, phone, opening hours, Google Maps link, category
+- up to 6 photos (saved locally, copied into every build under `assets/`, included in the ZIP)
+
+The build prompt and the fallback template use all of it: testimonials section, gallery, hero image, contact details. If the client unticked "Use my business's public reviews and photos", the block only shows the survey answers and nothing is fetched.
+
+Setup (one time):
+
+1. In Google Cloud Console create a project, enable **Places API (New)**, create an API key.
+2. Create `dashboard/config.local.json` (git-ignored):
+
+```json
+{ "googlePlaces": { "apiKey": "YOUR_KEY" } }
+```
+
+or set `GOOGLE_PLACES_API_KEY` in the environment. Without a key the rest of the dashboard works as before.
+
+Google's terms require attribution when you show their reviews and photos; the photo author names are stored in `data/business/<id>/business.json` (`photos[].credit`) and reviews carry the author name.
 
 ### Models
 
@@ -119,6 +144,9 @@ DELETE /api/requests/:id
 POST   /api/requests/:id/build          # SSE stream, body { "feedback": "" }
 GET    /api/requests/:id/builds
 GET    /api/requests/:id/zip?v=N        # ZIP download (header X-Client-Email)
+GET    /api/business/search?q=          # Google Places candidates
+POST   /api/requests/:id/business       # { placeId } fetch reviews + photos
+DELETE /api/requests/:id/business
 GET    /builds/:id/vN/index.html        # preview
 ```
 

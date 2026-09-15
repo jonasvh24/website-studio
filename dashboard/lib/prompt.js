@@ -10,7 +10,36 @@ function line(label, value) {
   return value ? `- ${label}: ${value}` : null;
 }
 
-function buildPrompt(req, feedback) {
+function businessSection(b) {
+  if (!b) return '';
+  const lines = [
+    `- Business name: ${b.name}`,
+    b.type ? `- Category: ${b.type}` : null,
+    b.summary ? `- Summary: ${b.summary}` : null,
+    b.address ? `- Address: ${b.address}` : null,
+    b.phone ? `- Phone: ${b.phone}` : null,
+    b.website ? `- Existing website: ${b.website}` : null,
+    b.mapsUrl ? `- Google Maps: ${b.mapsUrl}` : null,
+    b.rating ? `- Google rating: ${b.rating} / 5 from ${b.reviewCount} reviews` : null,
+    b.hours?.length ? `- Opening hours:\n${b.hours.map(h => `    ${h}`).join('\n')}` : null
+  ].filter(Boolean).join('\n');
+
+  const reviews = (b.reviews || []).map((r, i) =>
+    `${i + 1}. ${r.author} (${r.rating}/5${r.when ? ', ' + r.when : ''}): "${r.text.replace(/\s+/g, ' ')}"`).join('\n');
+
+  const photos = (b.photos || []).map((p, i) =>
+    `- assets/${p.file}${p.width && p.height ? ` (${p.width}x${p.height})` : ''}${p.credit ? `, photo by ${p.credit}` : ''}`).join('\n');
+
+  return `
+
+BUSINESS DATA (from the public Google Business listing; use it)
+${lines}
+${reviews ? `\nCUSTOMER REVIEWS (real, quote them verbatim in a testimonials section with author name and star rating)\n${reviews}` : ''}
+${photos ? `\nPHOTOS (already saved next to index.html; use them with <img src="assets/..."> in the hero and a gallery. Add descriptive alt text. Do not link to external image URLs.)\n${photos}` : ''}
+`;
+}
+
+function buildPrompt(req, feedback, business) {
   const c = req.client || {};
   const w = req.website || {};
   const s = req.social || {};
@@ -44,12 +73,13 @@ WHAT THE CLIENT WANTS (their own words)
 """
 ${w.description || ''}
 """
-${rebuild}
+${businessSection(business)}${rebuild}
 REQUIREMENTS
 - Produce exactly three files: index.html, styles.css, script.js. Nothing else.
 - index.html must link "styles.css" and "script.js" with relative paths, include <meta name="viewport">, a <title> with the client's name, and semantic HTML5 sections (header/nav, hero, about, work or services, contact, footer).
 - Use ALL the client's real information (name, title, bio, location, social links, email). Never invent a different name. Use short realistic placeholder copy only where information is missing, and mark it clearly with "[Add ...]".
 - Only link to social profiles the client actually provided.
+- If BUSINESS DATA is present: show the rating, address, phone and opening hours in a contact section, quote the reviews as testimonials, and use the listed photos. Never invent reviews, ratings or photos.
 - Honour the style preferences and color preference. Derive a coherent palette (CSS custom properties in :root) from the color preference.
 - Mobile-first, responsive with media queries, accessible (labels, alt text, focus states), fast (no frameworks, no external JS libraries, no CDN scripts). Google Fonts via <link> is allowed.
 - script.js: mobile nav toggle, smooth scrolling, subtle scroll-reveal animations, current year in footer. Must be vanilla JS with no errors.

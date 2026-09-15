@@ -2,3 +2,4 @@
 dashboard/data/
 .DS_Store
 node_modules/
+dashboard/config.local.json

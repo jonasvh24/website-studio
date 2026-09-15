@@ -7,7 +7,7 @@
   <meta name="description" content="Request form for a new website.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=2">
+  <link rel="stylesheet" href="styles.css?v=3">
 </head>
 <body>
   <main class="page">
@@ -53,6 +53,23 @@
         <div class="field">
           <label for="bio">Short bio</label>
           <textarea id="bio" name="bio" rows="3" placeholder="A few sentences about you and what you do."></textarea>
+        </div>
+
+        <div class="grid two">
+          <div class="field">
+            <label for="businessName">Business name</label>
+            <input id="businessName" name="businessName" type="text" placeholder="As it appears on Google Maps" autocomplete="organization">
+          </div>
+          <div class="field">
+            <label for="businessLocation">Business location</label>
+            <input id="businessLocation" name="businessLocation" type="text" placeholder="Street and city, so we find the right listing">
+          </div>
+        </div>
+        <div class="field">
+          <label class="checkline">
+            <input type="checkbox" name="usePublicData" value="yes" checked>
+            <span>Use my business's public Google reviews and photos on the website</span>
+          </label>
         </div>
       </section>
 
@@ -180,6 +197,6 @@
     <footer class="foot">Your answers stay on your device until you send the file.</footer>
   </main>
 
-  <script src="survey.js?v=2"></script>
+  <script src="survey.js?v=3"></script>
 </body>
 </html>

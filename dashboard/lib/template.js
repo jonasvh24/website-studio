@@ -37,10 +37,11 @@ function firstName(full) {
   return (full || 'there').trim().split(/\s+/)[0];
 }
 
-function generateSite(req) {
+function generateSite(req, business) {
   const c = req.client || {}, w = req.website || {}, s = req.social || {};
-  const name = c.fullName || 'Your Name';
-  const title = c.title || `${w.type || 'Personal'} Website`;
+  const b = business || null;
+  const name = b?.name || c.fullName || 'Your Name';
+  const title = c.title || b?.type || `${w.type || 'Personal'} Website`;
   const accent = pickAccent(w.colorPreference);
   const dark = isDark(req);
   const bio = c.bio || `[Add a short bio for ${name}]`;
@@ -85,6 +86,7 @@ function generateSite(req) {
       <ul class="nav-links">
         <li><a href="#about">About</a></li>
         <li><a href="#work">Work</a></li>
+        ${b?.reviews?.length ? '<li><a href="#reviews">Reviews</a></li>' : ''}
         <li><a href="#contact">Contact</a></li>
       </ul>
     </nav>
@@ -99,10 +101,27 @@ function generateSite(req) {
         <a class="btn btn-primary" href="#work">Work</a>
         <a class="btn" href="#contact">Contact</a>
       </div>
+      ${b?.photos?.[0] ? `<img class="hero-img reveal" src="assets/${esc(b.photos[0].file)}" alt="${esc(b.name)}">` : ''}
     </section>
+${b?.photos?.length > 1 ? `
+    <section id="gallery" class="section container">
+      <h2 class="reveal">Gallery</h2>
+      <div class="gallery">
+        ${b.photos.slice(1).map((p, i) => `<img class="reveal" src="assets/${esc(p.file)}" alt="${esc(b.name)} photo ${i + 2}" loading="lazy">`).join('\n        ')}
+      </div>
+    </section>` : ''}
+${b?.reviews?.length ? `
+    <section id="reviews" class="section container">
+      <h2 class="reveal">Reviews</h2>
+      ${b.rating ? `<p class="section-intro reveal">Rated ${esc(b.rating)} out of 5 on Google from ${esc(b.reviewCount)} reviews.</p>` : ''}
+      <div class="cards">
+        ${b.reviews.map(r => `<article class="card reveal"><div class="stars" aria-label="${esc(r.rating)} out of 5">${'&#9733;'.repeat(Math.round(r.rating || 0))}</div><p>${esc(r.text)}</p><h3>${esc(r.author)}</h3></article>`).join('\n        ')}
+      </div>
+    </section>` : ''}
 
     <section id="about" class="section container">
       <h2 class="reveal">About</h2>
+      ${b?.summary ? `<p class="section-intro reveal">${esc(b.summary)}</p>` : ''}
       <div class="cards">${cards}
       </div>
     </section>
@@ -121,6 +140,12 @@ function generateSite(req) {
       <h2 class="reveal">Contact</h2>
       <p class="reveal">Email:
         <a href="mailto:${esc(c.email || '')}">${esc(c.email || '[Add email]')}</a>.</p>
+      ${b ? `<dl class="biz reveal">
+        ${b.address ? `<dt>Address</dt><dd>${esc(b.address)}</dd>` : ''}
+        ${b.phone ? `<dt>Phone</dt><dd><a href="tel:${esc(b.phone.replace(/\s+/g, ''))}">${esc(b.phone)}</a></dd>` : ''}
+        ${b.hours?.length ? `<dt>Hours</dt><dd>${b.hours.map(esc).join('<br>')}</dd>` : ''}
+        ${b.mapsUrl ? `<dt>Map</dt><dd><a href="${esc(b.mapsUrl)}" target="_blank" rel="noopener">Open in Google Maps</a></dd>` : ''}
+      </dl>` : ''}
       ${socials.length ? `<div class="socials reveal">
           ${socialLinks}
         </div>` : ''}
@@ -201,6 +226,14 @@ a:hover { text-decoration: underline; }
 .socials { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 20px; }
 .socials a { padding: 10px 16px; border-radius: 999px; border: 1px solid var(--line); color: var(--text); font-weight: 500; }
 .socials a:hover { border-color: var(--accent); text-decoration: none; }
+
+.hero-img { display: block; width: 100%; max-height: 520px; object-fit: cover; border-radius: 12px; margin-top: 40px; border: 1px solid var(--line); }
+.gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
+.gallery img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 10px; border: 1px solid var(--line); }
+.stars { color: var(--accent); letter-spacing: 2px; margin-bottom: 10px; }
+.biz { display: grid; grid-template-columns: 110px 1fr; gap: 8px 16px; margin-top: 24px; font-size: 15px; }
+.biz dt { color: var(--text-3); }
+.biz dd { margin: 0; color: var(--text-2); }
 
 .footer { padding: 40px 0; color: var(--text-3); font-size: 14px; border-top: 1px solid var(--line); }
 

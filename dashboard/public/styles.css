@@ -458,3 +458,21 @@ select.version { padding: 7px 10px; font-size: 13px; width: auto; }
   .req-card { grid-template-columns: 40px 1fr; }
   .req-card .meta { grid-column: 2; text-align: left; }
 }
+
+/* Business listing */
+.biz-note { margin: 12px 0 0; font-size: 13px; color: var(--text-3); }
+.biz-note code { font-family: ui-monospace, Menlo, monospace; color: var(--text-2); }
+.biz-search { display: flex; gap: 8px; margin-top: 14px; }
+.biz-search input { flex: 1; }
+.biz-cands { display: grid; gap: 8px; margin-top: 12px; }
+.biz-cand, .biz-head { display: flex; justify-content: space-between; align-items: center; gap: 14px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+.biz-name { font-weight: 600; }
+.biz-attached { margin-top: 14px; }
+.biz-attached .biz-head { border-color: var(--yellow-line); }
+.biz-photos { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.biz-photos img { width: 120px; height: 90px; object-fit: cover; border-radius: 6px; border: 1px solid var(--line-2); }
+.biz-reviews { display: grid; gap: 8px; margin-top: 12px; }
+.biz-review { padding: 10px 12px; border: 1px solid var(--line); border-radius: 6px; font-size: 14px; }
+.biz-review p { margin: 6px 0 0; color: var(--text-2); }
+.stars { color: var(--yellow); letter-spacing: 1px; font-size: 13px; }
+@media (max-width: 640px) { .biz-cand, .biz-head, .biz-search { flex-direction: column; align-items: stretch; } }

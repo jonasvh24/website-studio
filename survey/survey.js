@@ -81,6 +81,11 @@
         stylePreferences: styles,
         colorPreference: val('colorPreference')
       },
+      business: {
+        name: val('businessName'),
+        location: val('businessLocation'),
+        usePublicData: !!form.querySelector('input[name="usePublicData"]:checked')
+      },
       social: {
         github: val('github'),
         linkedin: val('linkedin'),

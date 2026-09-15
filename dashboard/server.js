@@ -16,6 +16,10 @@
  *   GET  /api/requests/:id/builds   list build versions
  *   GET  /builds/:id/v:N/*          serve a build for preview
  *   GET  /api/requests/:id/zip?v=N  download a build as ZIP
+ *   GET  /api/business/search?q=    Google Places candidates for a business
+ *   POST /api/requests/:id/business { placeId }  fetch reviews + photos, attach to request
+ *   DELETE /api/requests/:id/business            detach business data
+ *   GET  /business/:id/*            serve fetched business photos
  */
 
 const http = require('http');
@@ -27,6 +31,7 @@ const { createZip } = require('./lib/zip');
 const { buildPrompt, parseOutput, FILES } = require('./lib/prompt');
 const { generateSite } = require('./lib/template');
 const llm = require('./lib/llm');
+const places = require('./lib/places');
 
 const ROOT = __dirname;
 const PUBLIC = path.join(ROOT, 'public');
@@ -34,18 +39,26 @@ const SURVEY = path.join(ROOT, '..', 'survey');
 const DATA = path.join(ROOT, 'data');
 const REQUESTS = path.join(DATA, 'requests');
 const BUILDS = path.join(DATA, 'builds');
+const BUSINESS = path.join(DATA, 'business');
 
+// config.json is committed; config.local.json (git-ignored) overrides it, e.g. for API keys.
 const config = JSON.parse(fs.readFileSync(path.join(ROOT, 'config.json'), 'utf8'));
+try {
+  const local = JSON.parse(fs.readFileSync(path.join(ROOT, 'config.local.json'), 'utf8'));
+  for (const [k, v] of Object.entries(local)) {
+    config[k] = v && typeof v === 'object' && !Array.isArray(v) ? { ...(config[k] || {}), ...v } : v;
+  }
+} catch { /* no local overrides */ }
 const PORT = Number(process.env.PORT || config.port || 4321);
 
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8',
   '.js': 'application/javascript; charset=utf-8', '.json': 'application/json; charset=utf-8',
-  '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.ico': 'image/x-icon',
+  '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.ico': 'image/x-icon',
   '.woff2': 'font/woff2', '.txt': 'text/plain; charset=utf-8'
 };
 
-for (const d of [REQUESTS, BUILDS]) fs.mkdirSync(d, { recursive: true });
+for (const d of [REQUESTS, BUILDS, BUSINESS]) fs.mkdirSync(d, { recursive: true });
 
 // ── helpers ─────────────────────────────────────────────────────────
 const safeId = (id) => /^[\w\-]{1,80}$/.test(id);
@@ -94,6 +107,7 @@ function normalizeRequest(raw) {
   r.client = r.client || { fullName: r.fullName, email: r.email, location: r.location, title: r.title, bio: r.bio };
   r.website = r.website || { type: r.websiteType, description: r.description, stylePreferences: r.stylePreferences || [], colorPreference: r.colorPreference };
   r.social = r.social || { github: r.github, linkedin: r.linkedin, twitter: r.twitter, currentWebsite: r.currentWebsite };
+  r.business = r.business || { name: r.businessName || '', location: r.businessLocation || '', usePublicData: r.usePublicData !== false };
   r.extraNotes = r.extraNotes || '';
   if (!r.client.fullName || !r.client.email) throw new Error('Request needs client.fullName and client.email');
   if (!r.id || !safeId(r.id)) r.id = `req_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -136,6 +150,21 @@ async function listBuilds(id) {
   } catch { return []; }
 }
 
+// ── business data (Google Places) ───────────────────────────────────
+const bizFile = (id) => path.join(BUSINESS, id, 'business.json');
+const bizPhotoDir = (id) => path.join(BUSINESS, id, 'photos');
+
+async function getBusiness(id) {
+  try { return JSON.parse(await fsp.readFile(bizFile(id), 'utf8')); } catch { return null; }
+}
+
+async function attachBusiness(id, placeId) {
+  await fsp.mkdir(path.join(BUSINESS, id), { recursive: true });
+  const data = await places.details(config, placeId, bizPhotoDir(id));
+  await fsp.writeFile(bizFile(id), JSON.stringify(data, null, 2));
+  return data;
+}
+
 // ── build (SSE) ─────────────────────────────────────────────────────
 const activeBuilds = new Map(); // id → AbortController
 
@@ -159,7 +188,8 @@ async function handleBuild(req, res, id) {
   req.on('close', () => ac.abort());
 
   const started = Date.now();
-  const prompt = buildPrompt(request, feedback);
+  const business = request.business?.usePublicData === false ? null : await getBusiness(id);
+  const prompt = buildPrompt(request, feedback, business);
   let files, provider = 'template', model = 'built-in', warnings = [];
 
   try {
@@ -176,7 +206,7 @@ async function handleBuild(req, res, id) {
     const parsed = parseOutput(text);
     files = parsed.files;
     if (parsed.missing.length) {
-      const fallback = generateSite(request);
+      const fallback = generateSite(request, business);
       for (const f of parsed.missing) files[f] = fallback[f];
       warnings.push(`Model did not return ${parsed.missing.join(', ')}; filled from template.`);
     }
@@ -187,7 +217,7 @@ async function handleBuild(req, res, id) {
     if (ac.signal.aborted) { clearInterval(ping); return res.end(); }
     if (!err.noModel) console.error('[build]', err);
     emit('status', { message: `${err.message}. Using the built-in template generator.` });
-    files = generateSite(request);
+    files = generateSite(request, business);
     warnings.push(`No model output (${err.message}). Built with the template generator instead.`);
   }
 
@@ -197,9 +227,16 @@ async function handleBuild(req, res, id) {
   const dir = path.join(BUILDS, id, `v${version}`);
   await fsp.mkdir(dir, { recursive: true });
   for (const [name, content] of Object.entries(files)) await fsp.writeFile(path.join(dir, name), content);
+  if (business?.photos?.length) {
+    await fsp.mkdir(path.join(dir, 'assets'), { recursive: true });
+    for (const ph of business.photos) {
+      await fsp.copyFile(path.join(bizPhotoDir(id), ph.file), path.join(dir, 'assets', ph.file)).catch(() => {});
+    }
+  }
 
   const meta = {
     version, provider, model, feedback, warnings,
+    business: business ? { name: business.name, rating: business.rating, reviews: business.reviews.length, photos: business.photos.length } : null,
     createdAt: new Date().toISOString(),
     durationMs: Date.now() - started,
     sizes: Object.fromEntries(Object.entries(files).map(([k, v]) => [k, Buffer.byteLength(v)]))
@@ -225,6 +262,11 @@ async function handleZip(res, id, v) {
   for (const f of FILES) {
     try { entries.push({ name: f, data: await fsp.readFile(path.join(dir, f)) }); } catch { /* skip */ }
   }
+  try {
+    for (const f of await fsp.readdir(path.join(dir, 'assets'))) {
+      entries.push({ name: `assets/${f}`, data: await fsp.readFile(path.join(dir, 'assets', f)) });
+    }
+  } catch { /* no assets */ }
   const c = request.client;
   entries.push({
     name: 'README.txt',
@@ -241,6 +283,7 @@ FILES
 - index.html   the page
 - styles.css   styling
 - script.js    interactions
+- assets/      photos (if any)
 
 Text marked [Add ...] is a placeholder. Replace it with your own content.
 `
@@ -265,7 +308,7 @@ const server = http.createServer(async (req, res) => {
   try {
     // API
     if (p === '/api/status' && req.method === 'GET') {
-      return send(res, 200, { ok: true, providers: await llm.providersStatus(config), config: { ollamaModel: config.ollama.model, port: PORT } });
+      return send(res, 200, { ok: true, providers: await llm.providersStatus(config), places: places.isConfigured(config), config: { ollamaModel: config.ollama.model, port: PORT } });
     }
     if (p === '/api/requests' && req.method === 'GET') return send(res, 200, await listRequests());
     if (p === '/api/requests' && req.method === 'POST') {
@@ -287,6 +330,7 @@ const server = http.createServer(async (req, res) => {
       if (req.method === 'DELETE') {
         await fsp.rm(path.join(REQUESTS, `${id}.json`), { force: true });
         await fsp.rm(path.join(BUILDS, id), { recursive: true, force: true });
+        await fsp.rm(path.join(BUSINESS, id), { recursive: true, force: true });
         return send(res, 200, { ok: true });
       }
     }
@@ -294,8 +338,28 @@ const server = http.createServer(async (req, res) => {
     if ((m = p.match(/^\/api\/requests\/([\w\-]+)\/builds$/)) && req.method === 'GET') return send(res, 200, await listBuilds(m[1]));
     if ((m = p.match(/^\/api\/requests\/([\w\-]+)\/zip$/)) && req.method === 'GET') return handleZip(res, m[1], url.searchParams.get('v'));
 
+    if (p === '/api/business/search' && req.method === 'GET') {
+      if (!places.isConfigured(config)) return send(res, 400, { error: 'Google Places API key is not configured. Add googlePlaces.apiKey to config.json.' });
+      const q = (url.searchParams.get('q') || '').trim();
+      if (!q) return send(res, 400, { error: 'Missing q' });
+      return send(res, 200, { candidates: await places.search(config, q) });
+    }
+    if ((m = p.match(/^\/api\/requests\/([\w\-]+)\/business$/))) {
+      const id = m[1];
+      if (!(await getRequest(id))) return send(res, 404, { error: 'Request not found' });
+      if (req.method === 'GET') return send(res, 200, { business: await getBusiness(id), configured: places.isConfigured(config) });
+      if (req.method === 'POST') {
+        if (!places.isConfigured(config)) return send(res, 400, { error: 'Google Places API key is not configured. Add googlePlaces.apiKey to config.json.' });
+        let body = {}; try { body = JSON.parse(await readBody(req)); } catch { /* ignore */ }
+        if (!body.placeId) return send(res, 400, { error: 'Missing placeId' });
+        return send(res, 200, { business: await attachBusiness(id, body.placeId) });
+      }
+      if (req.method === 'DELETE') { await fsp.rm(path.join(BUSINESS, id), { recursive: true, force: true }); return send(res, 200, { ok: true }); }
+    }
+
     // Static: builds, survey, dashboard
     if (p.startsWith('/builds/')) return serveStatic(res, BUILDS, decodeURIComponent(p.slice('/builds/'.length)));
+    if (p.startsWith('/business/')) return serveStatic(res, BUSINESS, decodeURIComponent(p.slice('/business/'.length)));
     if (p === '/survey') { res.writeHead(302, { Location: '/survey/' }); return res.end(); }
     if (p.startsWith('/survey/')) return serveStatic(res, SURVEY, decodeURIComponent(p.slice('/survey/'.length)) || 'index.html');
     return serveStatic(res, PUBLIC, decodeURIComponent(p === '/' ? 'index.html' : p.slice(1)));
