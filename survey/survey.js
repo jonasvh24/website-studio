@@ -1,4 +1,4 @@
-/* Website Request Survey — collects answers, saves JSON, downloads it. */
+/* Website request form: collects answers, saves JSON, downloads it. */
 (function () {
   'use strict';
 
@@ -149,7 +149,7 @@
 
     const btn = $('#submitBtn');
     btn.disabled = true;
-    btn.querySelector('span').textContent = 'Saving…';
+    btn.querySelector('span').textContent = 'Saving';
 
     const req = collect();
     lastRequest = req;

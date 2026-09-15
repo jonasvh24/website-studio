@@ -3,15 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Website Studio · Dashboard</title>
+  <title>Website Studio</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <div class="bg-orb orb-1"></div>
-  <div class="bg-orb orb-2"></div>
-  <div class="bg-orb orb-3"></div>
-
   <main class="page wide">
     <!-- Top bar -->
     <header class="topbar">
@@ -22,8 +18,8 @@
         Website Studio
       </div>
       <div class="toolbar">
-        <span class="status-pill" id="modelStatus"><span class="status-dot"></span><span>Checking model…</span></span>
-        <a class="btn btn-sm btn-ghost" href="/survey/" target="_blank" rel="noopener">Open survey ↗</a>
+        <span class="status-pill" id="modelStatus"><span class="status-dot"></span><span>Checking model</span></span>
+        <a class="btn btn-sm btn-ghost" href="/survey/" target="_blank" rel="noopener">Open survey</a>
       </div>
     </header>
 
@@ -41,7 +37,7 @@
       <div class="panel-head">
         <div>
           <h2>Select a request</h2>
-          <p>Import JSON files from the survey, or pull from this browser's storage.</p>
+          <p>Import JSON files from the survey, or load them from this browser's storage.</p>
         </div>
         <div class="toolbar">
           <input type="file" id="fileInput" accept=".json,application/json" multiple hidden>
@@ -51,7 +47,7 @@
         </div>
       </div>
 
-      <div class="dropzone" id="dropzone">Drop survey JSON files anywhere here to import them</div>
+      <div class="dropzone" id="dropzone">Drop survey JSON files here to import them</div>
 
       <div class="req-list" id="reqList"></div>
       <div class="empty" id="reqEmpty" hidden>
@@ -73,8 +69,8 @@
       </div>
       <div class="review-grid" id="reviewGrid"></div>
       <div class="panel-foot">
-        <button class="btn" data-goto="1">← Back to requests</button>
-        <button class="btn btn-primary" data-goto="3">Continue to build →</button>
+        <button class="btn" data-goto="1">Back to requests</button>
+        <button class="btn btn-primary" data-goto="3">Continue to build</button>
       </div>
     </section>
 
@@ -96,7 +92,7 @@
         </div>
       </div>
       <div class="panel-foot">
-        <button class="btn" data-goto="2" id="buildBackBtn">← Back to review</button>
+        <button class="btn" data-goto="2" id="buildBackBtn">Back to review</button>
         <span></span>
       </div>
     </section>
@@ -115,7 +111,7 @@
             <button data-device="tablet">Tablet</button>
             <button data-device="mobile">Mobile</button>
           </div>
-          <a class="btn btn-sm btn-ghost" id="openTabBtn" href="#" target="_blank" rel="noopener">Open in new tab ↗</a>
+          <a class="btn btn-sm btn-ghost" id="openTabBtn" href="#" target="_blank" rel="noopener">Open in new tab</a>
         </div>
       </div>
       <div class="preview-frame-wrap">
@@ -126,8 +122,8 @@
         <iframe class="preview-frame" id="previewFrame" title="Website preview"></iframe>
       </div>
       <div class="panel-foot">
-        <button class="btn" data-goto="3">← Back to build</button>
-        <button class="btn btn-primary" data-goto="5">Continue to delivery →</button>
+        <button class="btn" data-goto="3">Back to build</button>
+        <button class="btn btn-primary" data-goto="5">Continue to delivery</button>
       </div>
     </section>
 
@@ -143,17 +139,17 @@
       <div class="deliver-grid">
         <div class="option-card">
           <h3>Request rebuild</h3>
-          <p>Not happy with the result? Describe what should change and the model will generate a new version. Previous versions are kept.</p>
-          <textarea id="rebuildFeedback" rows="4" placeholder="e.g. Make the hero darker, add a services section with three cards, use a serif headline font…"></textarea>
-          <button class="btn" id="rebuildBtn">↻ Request Rebuild</button>
+          <p>Describe what should change. The model generates a new version. Earlier versions are kept.</p>
+          <textarea id="rebuildFeedback" rows="4" placeholder="e.g. Larger headline, add a services section with three cards, use a serif font for headings"></textarea>
+          <button class="btn" id="rebuildBtn">Request Rebuild</button>
         </div>
 
         <div class="option-card primary">
           <h3>Transfer ownership</h3>
-          <p>Download a clean, ready-to-host ZIP (index.html, styles.css, script.js, README) and send it to the client.</p>
+          <p>Download a ready-to-host ZIP (index.html, styles.css, script.js, README) and send it to the client.</p>
           <button class="btn btn-primary btn-transfer" id="transferBtn">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
-            <span>Transfer Ownership – Download ZIP</span>
+            <span>Transfer Ownership: Download ZIP</span>
           </button>
         </div>
       </div>
@@ -169,12 +165,12 @@
       </div>
 
       <div class="panel-foot">
-        <button class="btn" data-goto="4">← Back to preview</button>
+        <button class="btn" data-goto="4">Back to preview</button>
         <button class="btn btn-ghost" data-goto="1">Start another request</button>
       </div>
     </section>
 
-    <footer class="foot">Website Studio · runs entirely on this machine · nothing leaves localhost</footer>
+    <footer class="foot">Local dashboard. Runs on this machine only.</footer>
   </main>
 
   <div class="toast" id="toast"></div>

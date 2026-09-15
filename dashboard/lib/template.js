@@ -23,7 +23,7 @@ function pickAccent(pref) {
     ['emerald', '#10b981'], ['black', '#111827'], ['white', '#e5e7eb'], ['grey', '#9ca3af'], ['gray', '#9ca3af']
   ];
   for (const [k, v] of table) if (p.includes(k)) return v;
-  return '#7c5cff';
+  return '#ffd400';
 }
 
 function isDark(req) {
@@ -57,7 +57,7 @@ function generateSite(req) {
   const cards = [
     ['Who I am', bio],
     ['What I do', title],
-    ['Where I’m based', c.location || '[Add location]']
+    ['Based in', c.location || '[Add location]']
   ].map(([h, p]) => `
         <article class="card reveal">
           <h3>${esc(h)}</h3>
@@ -69,7 +69,7 @@ function generateSite(req) {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${esc(name)} — ${esc(title)}</title>
+  <title>${esc(name)} | ${esc(title)}</title>
   <meta name="description" content="${esc(bio.slice(0, 150))}">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -92,12 +92,12 @@ function generateSite(req) {
 
   <main id="top">
     <section class="hero container">
-      <p class="eyebrow reveal">${esc(title)}${c.location ? ` · ${esc(c.location)}` : ''}</p>
-      <h1 class="reveal">Hi, I’m <span class="accent">${esc(name)}</span>.</h1>
+      <p class="eyebrow reveal">${esc(title)}${c.location ? `, ${esc(c.location)}` : ''}</p>
+      <h1 class="reveal"><span class="accent">${esc(name)}</span></h1>
       <p class="lead reveal">${esc(bio)}</p>
       <div class="hero-actions reveal">
-        <a class="btn btn-primary" href="#work">See my work</a>
-        <a class="btn" href="#contact">Get in touch</a>
+        <a class="btn btn-primary" href="#work">Work</a>
+        <a class="btn" href="#contact">Contact</a>
       </div>
     </section>
 
@@ -118,8 +118,8 @@ function generateSite(req) {
     </section>
 
     <section id="contact" class="section container contact">
-      <h2 class="reveal">Let’s talk</h2>
-      <p class="reveal">Want to work together or just say hello? Reach me at
+      <h2 class="reveal">Contact</h2>
+      <p class="reveal">Email:
         <a href="mailto:${esc(c.email || '')}">${esc(c.email || '[Add email]')}</a>.</p>
       ${socials.length ? `<div class="socials reveal">
           ${socialLinks}
@@ -183,17 +183,17 @@ a:hover { text-decoration: underline; }
   display: inline-flex; align-items: center; padding: 14px 24px;
   border-radius: 12px; font-weight: 600; font-size: 15px;
   border: 1px solid var(--line); color: var(--text); background: var(--card);
-  transition: transform .15s, box-shadow .2s;
+  transition: border-color .15s, background .15s;
 }
-.btn:hover { transform: translateY(-2px); text-decoration: none; }
-.btn-primary { background: var(--accent); color: var(--on-accent); border-color: transparent; box-shadow: 0 10px 28px var(--accent-glow); }
+.btn:hover { border-color: var(--accent); text-decoration: none; }
+.btn-primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
 
 .section { padding: 70px 0; border-top: 1px solid var(--line); }
 .section h2 { font-size: 34px; letter-spacing: -0.02em; margin: 0 0 24px; }
 .section-intro { color: var(--text-2); max-width: 720px; font-size: 17px; margin: 0 0 32px; white-space: pre-line; }
 .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; }
-.card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 26px; transition: transform .2s, border-color .2s; }
-.card:hover { transform: translateY(-4px); border-color: var(--accent); }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 26px; transition: border-color .2s; }
+.card:hover { border-color: var(--accent); }
 .card h3 { margin: 0 0 8px; font-size: 18px; }
 .card p { margin: 0; color: var(--text-2); }
 
@@ -231,8 +231,7 @@ function darkCss(accent) {
   --text-2: #b1b6d4;
   --text-3: #7d83a8;
   --accent: ${accent};
-  --accent-glow: ${accent}55;
-  --on-accent: #ffffff;
+  --on-accent: #0a0a0a;
 }`);
 }
 
@@ -246,7 +245,6 @@ function lightCss(accent) {
   --text-2: #4b5068;
   --text-3: #8a8fa8;
   --accent: ${accent};
-  --accent-glow: ${accent}44;
   --on-accent: #ffffff;
 }`);
 }

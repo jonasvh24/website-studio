@@ -1,4 +1,4 @@
-/* Website Studio dashboard — 5-step workflow */
+/* Website Studio dashboard: 5-step workflow */
 (function () {
   'use strict';
 
@@ -79,14 +79,14 @@
       const { providers } = await api('/api/status');
       if (providers.ollama.ok) {
         const m = providers.ollama.models.includes(providers.ollama.preferred) ? providers.ollama.preferred : providers.ollama.models[0];
-        dot.className = 'status-dot ok'; txt.textContent = `Ollama · ${m}`;
-        $('#modelLine').textContent = `Model: Ollama / ${m} · ${providers.ollama.models.length} model(s) available locally`;
+        dot.className = 'status-dot ok'; txt.textContent = `Ollama: ${m}`;
+        $('#modelLine').textContent = `Model: Ollama / ${m}. ${providers.ollama.models.length} model(s) available locally.`;
       } else if (providers.openaiCompatible.ok) {
-        dot.className = 'status-dot ok'; txt.textContent = `${providers.openaiCompatible.label} · ${providers.openaiCompatible.model}`;
-        $('#modelLine').textContent = `Ollama offline → using ${providers.openaiCompatible.label}`;
+        dot.className = 'status-dot ok'; txt.textContent = `${providers.openaiCompatible.label}: ${providers.openaiCompatible.model}`;
+        $('#modelLine').textContent = `Ollama offline. Using ${providers.openaiCompatible.label}.`;
       } else {
-        dot.className = 'status-dot warn'; txt.textContent = 'No model · template mode';
-        $('#modelLine').textContent = 'No local model reachable — builds will use the built-in template generator. Start Ollama for AI builds.';
+        dot.className = 'status-dot warn'; txt.textContent = 'No model. Template mode';
+        $('#modelLine').textContent = 'No local model reachable. Builds will use the built-in template generator. Start Ollama for model builds.';
       }
     } catch {
       dot.className = 'status-dot bad'; txt.textContent = 'Server unreachable';
@@ -112,7 +112,7 @@
               <span class="tag">${esc(r.website.type || 'Website')}</span>
               ${built ? `<span class="tag green">${built} build${built > 1 ? 's' : ''}</span>` : ''}
             </div>
-            <div class="sub">${esc(r.client.email)}${r.client.title ? ' · ' + esc(r.client.title) : ''}${r.client.location ? ' · ' + esc(r.client.location) : ''}</div>
+            <div class="sub">${esc(r.client.email)}${r.client.title ? ', ' + esc(r.client.title) : ''}${r.client.location ? ', ' + esc(r.client.location) : ''}</div>
           </div>
           <div class="meta">Submitted<br>${esc(fmtDate(r.submittedAt))}</div>
         </div>`;
@@ -137,7 +137,7 @@
     if (!items.length) return toast('Nothing to import', true);
     const { imported, errors } = await api('/api/requests', { method: 'POST', body: JSON.stringify(items) });
     await loadRequests();
-    toast(`${imported.length} request(s) imported from ${sourceLabel}${errors.length ? ` · ${errors.length} skipped` : ''}`, imported.length === 0);
+    toast(`${imported.length} request(s) imported from ${sourceLabel}${errors.length ? `, ${errors.length} skipped` : ''}`, imported.length === 0);
   }
 
   async function importFiles(files) {
@@ -159,7 +159,7 @@
     let list = [];
     try { list = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); } catch { /* ignore */ }
     if (!Array.isArray(list) || !list.length) {
-      return toast('No "website_requests" found in this browser. Fill the survey at /survey/ on this origin, or import the JSON file.', true);
+      return toast('No saved requests in this browser. Fill in the survey at /survey/ on this origin, or import the JSON file.', true);
     }
     await importObjects(list, 'browser storage');
   });
@@ -176,7 +176,7 @@
   // ── Step 2: review ────────────────────────────────────────
   function kv(label, value, { link = false } = {}) {
     const empty = !value || (Array.isArray(value) && !value.length);
-    let v = empty ? '—' : esc(value);
+    let v = empty ? 'Not provided' : esc(value);
     if (!empty && link) v = `<a href="${esc(value)}" target="_blank" rel="noopener">${esc(value)}</a>`;
     if (!empty && label === 'Email') v = `<a href="mailto:${esc(value)}">${esc(value)}</a>`;
     return `<dt>${label}</dt><dd class="${empty ? 'empty-val' : ''}">${v}</dd>`;
@@ -185,7 +185,7 @@
   function renderReview() {
     const r = state.current, c = r.client, w = r.website, s = r.social;
     $('#reviewName').textContent = c.fullName;
-    $('#reviewSub').textContent = `${w.type || 'Website'} · submitted ${fmtDate(r.submittedAt)} · ${r.builds?.length || 0} build(s)`;
+    $('#reviewSub').textContent = `${w.type || 'Website'}. Submitted ${fmtDate(r.submittedAt)}. ${r.builds?.length || 0} build(s)`;
 
     const colorHex = /#([0-9a-f]{6}|[0-9a-f]{3})\b/i.exec(w.colorPreference || '')?.[0];
 
@@ -219,9 +219,9 @@
       <div class="review-block">
         <h3>Type &amp; style</h3>
         <dl class="kv">
-          <dt>Type</dt><dd>${esc(w.type || '—')}</dd>
-          <dt>Styles</dt><dd>${(w.stylePreferences || []).length ? `<span class="chip-row">${w.stylePreferences.map(x => `<span class="chip-static">${esc(x)}</span>`).join('')}</span>` : '<span class="empty-val">—</span>'}</dd>
-          <dt>Color</dt><dd>${w.colorPreference ? `${colorHex ? `<span class="swatch" style="background:${colorHex}"></span>` : ''}${esc(w.colorPreference)}` : '<span class="empty-val">—</span>'}</dd>
+          <dt>Type</dt><dd>${esc(w.type || 'Not provided')}</dd>
+          <dt>Styles</dt><dd>${(w.stylePreferences || []).length ? `<span class="chip-row">${w.stylePreferences.map(x => `<span class="chip-static">${esc(x)}</span>`).join('')}</span>` : '<span class="empty-val">Not provided</span>'}</dd>
+          <dt>Color</dt><dd>${w.colorPreference ? `${colorHex ? `<span class="swatch" style="background:${colorHex}"></span>` : ''}${esc(w.colorPreference)}` : '<span class="empty-val">Not provided</span>'}</dd>
         </dl>
       </div>
       <div class="review-block">
@@ -269,14 +269,14 @@
     state.building = true;
     const btn = $('#buildBtn');
     btn.disabled = true;
-    btn.innerHTML = `<span class="spinner"></span><span>Generating…</span>`;
+    btn.innerHTML = `<span class="spinner"></span><span>Generating</span>`;
     $('#buildBackBtn').disabled = true;
     $('#progressWrap').hidden = false;
     $('#buildLog').innerHTML = '';
     const bar = $('#progressBar');
     bar.classList.add('indeterminate');
     bar.firstElementChild.style.width = '0%';
-    log('Starting build…');
+    log('Starting build');
 
     const started = Date.now();
     let chars = 0, lastLogged = 0;
@@ -306,10 +306,10 @@
           if (ev === 'status') log(payload.message);
           if (ev === 'progress') {
             chars = payload.chars;
-            // Typical output is ~12–18k chars; show determinate-ish progress.
+            // Typical output is 12-18k chars; show approximate progress.
             bar.classList.remove('indeterminate');
             bar.firstElementChild.style.width = `${Math.min(95, (chars / 16000) * 100)}%`;
-            if (chars - lastLogged >= 2000) { lastLogged = chars; log(`Generated ${chars.toLocaleString()} characters…`); }
+            if (chars - lastLogged >= 2000) { lastLogged = chars; log(`Generated ${chars.toLocaleString()} characters`); }
           }
           if (ev === 'done') done = payload;
         }
@@ -319,7 +319,7 @@
       bar.classList.remove('indeterminate');
       bar.firstElementChild.style.width = '100%';
       const b = done.build;
-      log(`Done in ${(b.durationMs / 1000).toFixed(1)}s via ${b.provider} (${b.model}) → version ${b.version}`, 'ok');
+      log(`Done in ${(b.durationMs / 1000).toFixed(1)}s via ${b.provider} (${b.model}). Saved as version ${b.version}`, 'ok');
       b.warnings?.forEach(w => log(w, 'warn'));
 
       state.current = await api(`/api/requests/${state.current.id}`);
@@ -347,11 +347,11 @@
     const r = state.current;
     const sel = $('#versionSelect');
     sel.innerHTML = r.builds.map(b =>
-      `<option value="${b.version}">v${b.version} · ${b.provider}${b.feedback ? ' · rebuild' : ''}</option>`).join('');
+      `<option value="${b.version}">v${b.version} (${b.provider}${b.feedback ? ', rebuild' : ''})</option>`).join('');
     sel.value = String(state.version);
     const b = r.builds.find(x => x.version === state.version);
-    $('#previewSub').textContent = `${r.client.fullName} · version ${b.version} of ${r.builds.length} · built ${fmtDate(b.createdAt)}`;
-    $('#previewMeta').textContent = `${b.provider} / ${b.model} · ${Object.values(b.sizes || {}).reduce((a, n) => a + n, 0).toLocaleString()} bytes`;
+    $('#previewSub').textContent = `${r.client.fullName}. Version ${b.version} of ${r.builds.length}. Built ${fmtDate(b.createdAt)}`;
+    $('#previewMeta').textContent = `${b.provider} / ${b.model}, ${Object.values(b.sizes || {}).reduce((a, n) => a + n, 0).toLocaleString()} bytes`;
     const url = previewUrl();
     $('#previewUrl').textContent = location.origin + url;
     $('#openTabBtn').href = url;
@@ -369,7 +369,7 @@
   // ── Step 5: deliver ───────────────────────────────────────
   function renderDeliver() {
     const r = state.current;
-    $('#deliverSub').textContent = `${r.client.fullName} · version ${state.version} · client email: ${r.client.email}`;
+    $('#deliverSub').textContent = `${r.client.fullName}. Version ${state.version}. Client email: ${r.client.email}`;
     $('#emailBanner').hidden = true;
     $('#rebuildFeedback').value = '';
   }
@@ -383,10 +383,10 @@
     const r = state.current, email = r.client.email;
     const banner = $('#emailBanner');
     banner.hidden = false;
-    $('#emailLabel').textContent = 'Download starting · send this website to';
+    $('#emailLabel').textContent = 'Download starting. Send this website to';
     $('#emailValue').textContent = email;
-    $('#emailSub').textContent = `${r.client.fullName} · preparing ZIP for version ${state.version}…`;
-    $('#mailtoBtn').href = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(`Your new website is ready, ${r.client.fullName.split(' ')[0]}!`)}&body=${encodeURIComponent('Hi,\n\nYour website is attached as a ZIP. Unzip it and open index.html to preview, or upload the files to any static host.\n\nBest regards')}`;
+    $('#emailSub').textContent = `${r.client.fullName}. Preparing ZIP for version ${state.version}`;
+    $('#mailtoBtn').href = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent('Your website files')}&body=${encodeURIComponent('Hi ' + r.client.fullName.split(' ')[0] + ',\n\nThe website files are attached as a ZIP. Unzip it and open index.html to preview, or upload the files to any web host.\n\nRegards')}`;
     banner.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
     try {
@@ -399,9 +399,9 @@
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 3000);
 
-      $('#emailLabel').textContent = 'Download complete · send this website to';
-      $('#emailSub').textContent = `${r.client.fullName} · ${filename} (${(blob.size / 1024).toFixed(1)} KB)`;
-      toast(`ZIP downloaded — send it to ${email}`);
+      $('#emailLabel').textContent = 'Download complete. Send this website to';
+      $('#emailSub').textContent = `${r.client.fullName}. ${filename} (${(blob.size / 1024).toFixed(1)} KB)`;
+      toast(`ZIP downloaded. Send it to ${email}`);
     } catch (err) {
       $('#emailLabel').textContent = 'Download failed';
       $('#emailSub').textContent = err.message;

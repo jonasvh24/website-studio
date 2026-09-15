@@ -44,7 +44,7 @@ async function viaOllama(prompt, { ollama, onToken, onStatus, signal }) {
   const model = available.includes(ollama.model) ? ollama.model
     : available.find(m => m.startsWith(ollama.model.split(':')[0])) || available[0];
 
-  onStatus?.(`Ollama · ${model}`);
+  onStatus?.(`Ollama: ${model}`);
 
   const res = await fetch(`${base}/api/chat`, {
     method: 'POST',
@@ -79,7 +79,7 @@ async function viaOllama(prompt, { ollama, onToken, onStatus, signal }) {
 async function viaOpenAICompat(prompt, { openai, onToken, onStatus, signal }) {
   const base = openai.baseUrl.replace(/\/$/, '');
   const apiKey = openai.apiKey || process.env.KIMI_API_KEY || process.env.OPENAI_API_KEY || 'local';
-  onStatus?.(`${openai.label || 'OpenAI-compatible'} · ${openai.model}`);
+  onStatus?.(`${openai.label || 'OpenAI-compatible'}: ${openai.model}`);
 
   const res = await fetch(`${base}/chat/completions`, {
     method: 'POST',
@@ -120,7 +120,7 @@ async function generate(prompt, opts) {
     } catch (err) {
       if (err.name === 'AbortError') throw err;
       errors.push(`Ollama: ${err.message}`);
-      opts.onStatus?.(`Ollama unavailable (${err.message}). Trying fallback…`);
+      opts.onStatus?.(`Ollama unavailable (${err.message}). Trying fallback.`);
     }
   }
 

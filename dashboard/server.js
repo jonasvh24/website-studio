@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 /**
- * Website Studio — local dashboard server. Zero dependencies.
+ * Website Studio: local dashboard server. Zero dependencies.
  *
  *   node server.js            → http://localhost:4321
  *
@@ -163,7 +163,7 @@ async function handleBuild(req, res, id) {
   let files, provider = 'template', model = 'built-in', warnings = [];
 
   try {
-    emit('status', { message: 'Contacting local model…' });
+    emit('status', { message: 'Contacting local model' });
     const { text, provider: p, model: m } = await llm.generate(prompt, {
       config,
       signal: ac.signal,
@@ -172,7 +172,7 @@ async function handleBuild(req, res, id) {
     });
     provider = p; model = m;
 
-    emit('status', { message: 'Parsing generated files…' });
+    emit('status', { message: 'Parsing generated files' });
     const parsed = parseOutput(text);
     files = parsed.files;
     if (parsed.missing.length) {
@@ -186,7 +186,7 @@ async function handleBuild(req, res, id) {
   } catch (err) {
     if (ac.signal.aborted) { clearInterval(ping); return res.end(); }
     if (!err.noModel) console.error('[build]', err);
-    emit('status', { message: `${err.message} — using built-in template generator.` });
+    emit('status', { message: `${err.message}. Using the built-in template generator.` });
     files = generateSite(request);
     warnings.push(`No model output (${err.message}). Built with the template generator instead.`);
   }
@@ -229,7 +229,7 @@ async function handleZip(res, id, v) {
   entries.push({
     name: 'README.txt',
     data: `Website for ${c.fullName}
-Built ${new Date().toISOString().slice(0, 10)} · version ${version}
+Built ${new Date().toISOString().slice(0, 10)}, version ${version}
 
 HOW TO USE
 1. Unzip this folder.
@@ -242,7 +242,7 @@ FILES
 - styles.css   styling
 - script.js    interactions
 
-Text marked [Add ...] is a placeholder — replace it with your own content.
+Text marked [Add ...] is a placeholder. Replace it with your own content.
 `
   });
 
@@ -307,5 +307,5 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, '127.0.0.1', () => {
-  console.log(`\n  Website Studio dashboard\n  → http://localhost:${PORT}\n  → survey (local copy): http://localhost:${PORT}/survey/\n  Ollama: ${config.ollama.baseUrl} (${config.ollama.model})\n`);
+  console.log(`\n  Website Studio dashboard\n  http://localhost:${PORT}\n  survey (local copy): http://localhost:${PORT}/survey/\n  Ollama: ${config.ollama.baseUrl} (${config.ollama.model})\n`);
 });

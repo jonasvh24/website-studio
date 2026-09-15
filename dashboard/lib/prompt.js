@@ -54,6 +54,8 @@ REQUIREMENTS
 - Mobile-first, responsive with media queries, accessible (labels, alt text, focus states), fast (no frameworks, no external JS libraries, no CDN scripts). Google Fonts via <link> is allowed.
 - script.js: mobile nav toggle, smooth scrolling, subtle scroll-reveal animations, current year in footer. Must be vanilla JS with no errors.
 - styles.css: complete and polished. Tasteful spacing, typography hierarchy, hover/focus states, a hero with real visual impact.
+- Write plain, direct copy. No em dashes, no exclamation marks, no filler phrases like "passionate about", "crafted with care", "let's build something amazing", "elevate", "seamless", "journey". Short sentences.
+- No decorative gradients or glow effects unless the client asked for them. No emoji.
 - No lorem ipsum. No markdown fences inside file contents. No explanations.
 
 OUTPUT FORMAT (strict)
