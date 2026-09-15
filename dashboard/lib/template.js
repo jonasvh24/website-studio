@@ -23,7 +23,7 @@ function pickAccent(pref) {
     ['emerald', '#10b981'], ['black', '#111827'], ['white', '#e5e7eb'], ['grey', '#9ca3af'], ['gray', '#9ca3af']
   ];
   for (const [k, v] of table) if (p.includes(k)) return v;
-  return '#ffd400';
+  return '#6D28D9';
 }
 
 function isDark(req) {
@@ -282,7 +282,7 @@ function darkCss(accent) {
   --text-2: #b1b6d4;
   --text-3: #7d83a8;
   --accent: ${accent};
-  --on-accent: #0a0a0a;
+  --on-accent: #ffffff;
 }`);
 }
 
