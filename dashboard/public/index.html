@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Website Studio · Dashboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="bg-orb orb-1"></div>
+  <div class="bg-orb orb-2"></div>
+  <div class="bg-orb orb-3"></div>
+
+  <main class="page wide">
+    <!-- Top bar -->
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><path d="M4 10h16M9 20V10"/></svg>
+        </span>
+        Website Studio
+      </div>
+      <div class="toolbar">
+        <span class="status-pill" id="modelStatus"><span class="status-dot"></span><span>Checking model…</span></span>
+        <a class="btn btn-sm btn-ghost" href="/survey/" target="_blank" rel="noopener">Open survey ↗</a>
+      </div>
+    </header>
+
+    <!-- Step indicator -->
+    <nav class="glass stepper" id="stepper" aria-label="Workflow">
+      <div class="step" data-step="1"><span class="n">1</span><span>Select request<small>Pick a client</small></span></div>
+      <div class="step" data-step="2"><span class="n">2</span><span>Review<small>Check the brief</small></span></div>
+      <div class="step" data-step="3"><span class="n">3</span><span>Build<small>Generate with local AI</small></span></div>
+      <div class="step" data-step="4"><span class="n">4</span><span>Preview<small>Inspect the result</small></span></div>
+      <div class="step" data-step="5"><span class="n">5</span><span>Deliver<small>Rebuild or hand over</small></span></div>
+    </nav>
+
+    <!-- STEP 1: Select -->
+    <section class="glass panel" id="panel-1">
+      <div class="panel-head">
+        <div>
+          <h2>Select a request</h2>
+          <p>Import JSON files from the survey, or pull from this browser's storage.</p>
+        </div>
+        <div class="toolbar">
+          <input type="file" id="fileInput" accept=".json,application/json" multiple hidden>
+          <button class="btn btn-sm btn-primary" id="importBtn">Import JSON files</button>
+          <button class="btn btn-sm" id="localStorageBtn">Load from browser storage</button>
+          <button class="btn btn-sm btn-ghost" id="refreshBtn">Refresh</button>
+        </div>
+      </div>
+
+      <div class="dropzone" id="dropzone">Drop survey JSON files anywhere here to import them</div>
+
+      <div class="req-list" id="reqList"></div>
+      <div class="empty" id="reqEmpty" hidden>
+        <h3>No requests yet</h3>
+        <p>Import a <code>website-request_*.json</code> file from the survey to get started.</p>
+      </div>
+    </section>
+
+    <!-- STEP 2: Review -->
+    <section class="glass panel" id="panel-2" hidden>
+      <div class="panel-head">
+        <div>
+          <h2 id="reviewName">Review</h2>
+          <p id="reviewSub"></p>
+        </div>
+        <div class="toolbar">
+          <button class="btn btn-sm btn-ghost btn-danger" id="deleteBtn">Delete request</button>
+        </div>
+      </div>
+      <div class="review-grid" id="reviewGrid"></div>
+      <div class="panel-foot">
+        <button class="btn" data-goto="1">← Back to requests</button>
+        <button class="btn btn-primary" data-goto="3">Continue to build →</button>
+      </div>
+    </section>
+
+    <!-- STEP 3: Build -->
+    <section class="glass panel" id="panel-3" hidden>
+      <div class="build-center">
+        <h2 id="buildTitle">Build the website</h2>
+        <p id="buildDesc">The local model will generate a complete responsive site (HTML + CSS + JS) from everything the client provided.</p>
+        <div class="feedback-box" id="feedbackBox" hidden><strong>Rebuild feedback:</strong> <span id="feedbackText"></span></div>
+        <button class="btn btn-primary btn-lg" id="buildBtn">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+          <span>Build Website</span>
+        </button>
+        <div class="model-line" id="modelLine"></div>
+
+        <div class="progress-wrap" id="progressWrap" hidden>
+          <div class="progress-bar indeterminate" id="progressBar"><div></div></div>
+          <div class="log" id="buildLog"></div>
+        </div>
+      </div>
+      <div class="panel-foot">
+        <button class="btn" data-goto="2" id="buildBackBtn">← Back to review</button>
+        <span></span>
+      </div>
+    </section>
+
+    <!-- STEP 4: Preview -->
+    <section class="glass panel" id="panel-4" hidden>
+      <div class="panel-head">
+        <div>
+          <h2>Preview</h2>
+          <p id="previewSub"></p>
+        </div>
+        <div class="toolbar">
+          <select class="version" id="versionSelect" aria-label="Build version"></select>
+          <div class="seg" id="deviceSeg">
+            <button data-device="desktop" class="on">Desktop</button>
+            <button data-device="tablet">Tablet</button>
+            <button data-device="mobile">Mobile</button>
+          </div>
+          <a class="btn btn-sm btn-ghost" id="openTabBtn" href="#" target="_blank" rel="noopener">Open in new tab ↗</a>
+        </div>
+      </div>
+      <div class="preview-frame-wrap">
+        <div class="preview-toolbar">
+          <span class="url" id="previewUrl"></span>
+          <span id="previewMeta" style="font-size:12px;color:var(--text-3)"></span>
+        </div>
+        <iframe class="preview-frame" id="previewFrame" title="Website preview"></iframe>
+      </div>
+      <div class="panel-foot">
+        <button class="btn" data-goto="3">← Back to build</button>
+        <button class="btn btn-primary" data-goto="5">Continue to delivery →</button>
+      </div>
+    </section>
+
+    <!-- STEP 5: Deliver -->
+    <section class="glass panel" id="panel-5" hidden>
+      <div class="panel-head">
+        <div>
+          <h2>Deliver</h2>
+          <p id="deliverSub"></p>
+        </div>
+      </div>
+
+      <div class="deliver-grid">
+        <div class="option-card">
+          <h3>Request rebuild</h3>
+          <p>Not happy with the result? Describe what should change and the model will generate a new version. Previous versions are kept.</p>
+          <textarea id="rebuildFeedback" rows="4" placeholder="e.g. Make the hero darker, add a services section with three cards, use a serif headline font…"></textarea>
+          <button class="btn" id="rebuildBtn">↻ Request Rebuild</button>
+        </div>
+
+        <div class="option-card primary">
+          <h3>Transfer ownership</h3>
+          <p>Download a clean, ready-to-host ZIP (index.html, styles.css, script.js, README) and send it to the client.</p>
+          <button class="btn btn-primary btn-transfer" id="transferBtn">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+            <span>Transfer Ownership – Download ZIP</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="client-email-banner" id="emailBanner" hidden>
+        <div class="label" id="emailLabel">Send this website to</div>
+        <div class="email" id="emailValue"></div>
+        <div class="sub" id="emailSub"></div>
+        <div class="row">
+          <button class="btn btn-sm" id="copyEmailBtn">Copy email</button>
+          <a class="btn btn-sm" id="mailtoBtn" href="#">Open mail client</a>
+        </div>
+      </div>
+
+      <div class="panel-foot">
+        <button class="btn" data-goto="4">← Back to preview</button>
+        <button class="btn btn-ghost" data-goto="1">Start another request</button>
+      </div>
+    </section>
+
+    <footer class="foot">Website Studio · runs entirely on this machine · nothing leaves localhost</footer>
+  </main>
+
+  <div class="toast" id="toast"></div>
+  <script src="app.js"></script>
+</body>
+</html>

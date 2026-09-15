@@ -1,0 +1,4 @@
+# local data (client requests + generated builds) — never publish
+dashboard/data/
+.DS_Store
+node_modules/

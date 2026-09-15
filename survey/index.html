@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Website Request · Tell us about your site</title>
+  <meta name="description" content="Tell us about the website you want and we'll build it for you.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="bg-orb orb-1"></div>
+  <div class="bg-orb orb-2"></div>
+  <div class="bg-orb orb-3"></div>
+
+  <main class="page">
+    <header class="hero">
+      <span class="eyebrow">Website Request</span>
+      <h1>Let's build your <span class="grad">website</span>.</h1>
+      <p class="lead">Answer a few questions about you and the site you want. It takes about three minutes. The more detail you give, the better the result.</p>
+    </header>
+
+    <form id="surveyForm" class="glass form" novalidate>
+
+      <!-- ABOUT YOU -->
+      <section class="section">
+        <div class="section-head">
+          <span class="step-num">01</span>
+          <div>
+            <h2>About you</h2>
+            <p>Who is this website for?</p>
+          </div>
+        </div>
+
+        <div class="grid two">
+          <div class="field">
+            <label for="fullName">Full name <span class="req">*</span></label>
+            <input id="fullName" name="fullName" type="text" placeholder="Jane Doe" required autocomplete="name">
+            <span class="error" data-for="fullName">Please enter your full name.</span>
+          </div>
+          <div class="field">
+            <label for="email">Email <span class="req">*</span></label>
+            <input id="email" name="email" type="email" placeholder="jane@example.com" required autocomplete="email">
+            <span class="error" data-for="email">Please enter a valid email address.</span>
+          </div>
+          <div class="field">
+            <label for="location">Location</label>
+            <input id="location" name="location" type="text" placeholder="Amsterdam, NL" autocomplete="address-level2">
+          </div>
+          <div class="field">
+            <label for="title">Professional title / role</label>
+            <input id="title" name="title" type="text" placeholder="Product Designer, Photographer, Founder…" autocomplete="organization-title">
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="bio">Short bio</label>
+          <textarea id="bio" name="bio" rows="3" placeholder="A few sentences about you, what you do, and what you care about."></textarea>
+        </div>
+      </section>
+
+      <!-- THE WEBSITE -->
+      <section class="section">
+        <div class="section-head">
+          <span class="step-num">02</span>
+          <div>
+            <h2>The website</h2>
+            <p>What are we building?</p>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Website type</label>
+          <div class="chips" role="radiogroup" aria-label="Website type">
+            <label class="chip"><input type="radio" name="websiteType" value="Personal Portfolio" checked><span>Personal Portfolio</span></label>
+            <label class="chip"><input type="radio" name="websiteType" value="Freelancer"><span>Freelancer</span></label>
+            <label class="chip"><input type="radio" name="websiteType" value="Creator"><span>Creator</span></label>
+            <label class="chip"><input type="radio" name="websiteType" value="Business"><span>Business</span></label>
+            <label class="chip"><input type="radio" name="websiteType" value="Landing Page"><span>Landing Page</span></label>
+            <label class="chip"><input type="radio" name="websiteType" value="Other"><span>Other</span></label>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="description">Describe the website you want <span class="req">*</span></label>
+          <textarea id="description" name="description" rows="6" required placeholder="What should the site do? Which sections do you need (about, work, services, pricing, contact…)? Who is the audience? Any sites you admire?"></textarea>
+          <div class="hint-row">
+            <span class="error" data-for="description">Please describe the website you want (at least 20 characters).</span>
+            <span class="counter" id="descCounter">0 characters</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- STYLE -->
+      <section class="section">
+        <div class="section-head">
+          <span class="step-num">03</span>
+          <div>
+            <h2>Look &amp; feel</h2>
+            <p>Pick as many as you like.</p>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Style preferences</label>
+          <div class="chips" aria-label="Style preferences">
+            <label class="chip"><input type="checkbox" name="stylePreferences" value="Minimal"><span>Minimal</span></label>
+            <label class="chip"><input type="checkbox" name="stylePreferences" value="Modern"><span>Modern</span></label>
+            <label class="chip"><input type="checkbox" name="stylePreferences" value="Dark"><span>Dark</span></label>
+            <label class="chip"><input type="checkbox" name="stylePreferences" value="Light"><span>Light</span></label>
+            <label class="chip"><input type="checkbox" name="stylePreferences" value="Creative"><span>Creative</span></label>
+            <label class="chip"><input type="checkbox" name="stylePreferences" value="Professional"><span>Professional</span></label>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="colorPreference">Color preference</label>
+          <div class="color-row">
+            <input id="colorSwatch" type="color" value="#7c5cff" aria-label="Pick an accent color">
+            <input id="colorPreference" name="colorPreference" type="text" placeholder="e.g. deep blue with gold accents, or #7c5cff">
+          </div>
+        </div>
+      </section>
+
+      <!-- LINKS -->
+      <section class="section">
+        <div class="section-head">
+          <span class="step-num">04</span>
+          <div>
+            <h2>Links</h2>
+            <p>Optional, but helps us understand your work.</p>
+          </div>
+        </div>
+
+        <div class="grid two">
+          <div class="field">
+            <label for="github">GitHub</label>
+            <input id="github" name="github" type="url" placeholder="https://github.com/username">
+          </div>
+          <div class="field">
+            <label for="linkedin">LinkedIn</label>
+            <input id="linkedin" name="linkedin" type="url" placeholder="https://linkedin.com/in/username">
+          </div>
+          <div class="field">
+            <label for="twitter">Twitter / X</label>
+            <input id="twitter" name="twitter" type="url" placeholder="https://x.com/username">
+          </div>
+          <div class="field">
+            <label for="currentWebsite">Current website</label>
+            <input id="currentWebsite" name="currentWebsite" type="url" placeholder="https://yoursite.com">
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="extraNotes">Extra notes</label>
+          <textarea id="extraNotes" name="extraNotes" rows="3" placeholder="Deadlines, must-haves, things to avoid, anything else."></textarea>
+        </div>
+      </section>
+
+      <div class="actions">
+        <p class="fineprint">Your answers are saved as a file on your device and sent to us. No account required.</p>
+        <button type="submit" class="btn btn-primary" id="submitBtn">
+          <span>Submit request</span>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+        </button>
+      </div>
+    </form>
+
+    <!-- SUCCESS -->
+    <section id="success" class="glass success" hidden>
+      <div class="check">
+        <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+      </div>
+      <h2>Request received</h2>
+      <p>Thanks, <strong id="successName"></strong>. Your request file <code id="successFile"></code> has been downloaded.</p>
+      <p class="muted">Please send that file to us, or keep it — we'll be in touch at <strong id="successEmail"></strong>.</p>
+      <div class="success-actions">
+        <button type="button" class="btn btn-ghost" id="downloadAgain">Download JSON again</button>
+        <button type="button" class="btn btn-ghost" id="newRequest">Submit another request</button>
+      </div>
+    </section>
+
+    <footer class="foot">Crafted with care · Your data stays on your device until you send it.</footer>
+  </main>
+
+  <script src="survey.js"></script>
+</body>
+</html>
