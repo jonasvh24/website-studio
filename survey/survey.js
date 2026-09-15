@@ -11,6 +11,8 @@
   const colorText = document.getElementById('colorPreference');
 
   let lastRequest = null;
+  const CFG = Object.assign({ remote: 'auto', endpoint: '', contactEmail: '', maxFiles: 12, maxImageEdge: 1600, maxFileBytes: 3 * 1024 * 1024 }, window.SURVEY_CONFIG || {});
+  const files = [];   // { name, type, size, dataUrl, kind }
 
   // ── Small helpers ───────────────────────────────────────────
   const $ = (sel, root = document) => root.querySelector(sel);
@@ -28,6 +30,10 @@
   function makeId() {
     const rnd = Math.random().toString(36).slice(2, 8);
     return `req_${Date.now().toString(36)}_${rnd}`;
+  }
+
+  function escapeHtml(v) {
+    return String(v ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   }
 
   function isEmail(s) {
@@ -59,6 +65,88 @@
     if (field?.classList.contains('invalid')) field.classList.remove('invalid');
   });
 
+  // ── Files ───────────────────────────────────────────────────
+  const fileInput = document.getElementById('fileInput');
+  const fileDrop = document.getElementById('fileDrop');
+  const fileList = document.getElementById('fileList');
+  const fileError = document.getElementById('fileError');
+
+  function showFileError(msg) {
+    fileError.textContent = msg;
+    fileError.style.display = msg ? 'block' : 'none';
+  }
+
+  function readAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result);
+      r.onerror = reject;
+      r.readAsDataURL(file);
+    });
+  }
+
+  // Resize images in the browser so the JSON stays small.
+  function shrinkImage(file) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        const max = CFG.maxImageEdge;
+        let { width, height } = img;
+        const scale = Math.min(1, max / Math.max(width, height));
+        width = Math.round(width * scale); height = Math.round(height * scale);
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+        const keepPng = file.type === 'image/png' && file.size < 400 * 1024; // small PNGs (logos) keep transparency
+        resolve({ dataUrl: keepPng ? canvas.toDataURL('image/png') : canvas.toDataURL('image/jpeg', 0.82), width, height, type: keepPng ? 'image/png' : 'image/jpeg' });
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Could not read image')); };
+      img.src = url;
+    });
+  }
+
+  async function addFiles(list) {
+    showFileError('');
+    for (const f of list) {
+      if (files.length >= CFG.maxFiles) { showFileError(`You can add up to ${CFG.maxFiles} files.`); break; }
+      if (files.some(x => x.name === f.name && x.size === f.size)) continue;
+      try {
+        if (f.type.startsWith('image/')) {
+          const r = await shrinkImage(f);
+          const name = f.name.replace(/\.[^.]+$/, '') + (r.type === 'image/png' ? '.png' : '.jpg');
+          files.push({ name, type: r.type, size: Math.round(r.dataUrl.length * 0.75), width: r.width, height: r.height, dataUrl: r.dataUrl, kind: 'image' });
+        } else {
+          if (f.size > CFG.maxFileBytes) { showFileError(`${f.name} is larger than ${Math.round(CFG.maxFileBytes / 1048576)} MB and was skipped.`); continue; }
+          files.push({ name: f.name, type: f.type || 'application/octet-stream', size: f.size, dataUrl: await readAsDataUrl(f), kind: 'document' });
+        }
+      } catch (err) {
+        showFileError(`${f.name}: ${err.message}`);
+      }
+    }
+    renderFiles();
+  }
+
+  function renderFiles() {
+    fileList.innerHTML = files.map((f, i) => `
+      <div class="file-item">
+        ${f.kind === 'image' ? `<img src="${f.dataUrl}" alt="">` : `<div class="doc">${(f.name.split('.').pop() || 'FILE').toUpperCase().slice(0, 5)}</div>`}
+        <div class="fname" title="${f.name}">${f.name}</div>
+        <button type="button" class="rm" data-i="${i}" aria-label="Remove ${f.name}">&times;</button>
+      </div>`).join('');
+  }
+
+  fileDrop.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', () => { addFiles([...fileInput.files]); fileInput.value = ''; });
+  ['dragenter', 'dragover'].forEach(ev => fileDrop.addEventListener(ev, (e) => { e.preventDefault(); fileDrop.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach(ev => fileDrop.addEventListener(ev, (e) => { e.preventDefault(); fileDrop.classList.remove('over'); }));
+  fileDrop.addEventListener('drop', (e) => addFiles([...(e.dataTransfer?.files || [])]));
+  fileList.addEventListener('click', (e) => {
+    const b = e.target.closest('.rm');
+    if (b) { files.splice(Number(b.dataset.i), 1); renderFiles(); }
+  });
+
   // ── Build the request object ────────────────────────────────
   function collect() {
     const styles = [...form.querySelectorAll('input[name="stylePreferences"]:checked')].map(i => i.value);
@@ -86,6 +174,12 @@
         location: val('businessLocation'),
         usePublicData: !!form.querySelector('input[name="usePublicData"]:checked')
       },
+      domain: {
+        name: val('domainName').replace(/^https?:\/\//, '').replace(/\/.*$/, ''),
+        registrar: val('domainRegistrar'),
+        canGiveAccess: !!form.querySelector('input[name="domainAccess"]:checked')
+      },
+      files: files.map(f => ({ name: f.name, type: f.type, size: f.size, width: f.width, height: f.height, kind: f.kind, dataUrl: f.dataUrl })),
       social: {
         github: val('github'),
         linkedin: val('linkedin'),
@@ -147,24 +241,72 @@
     }
   }
 
+  // ── Remote delivery ─────────────────────────────────────────
+  const onNetlify = /\.netlify\.app$/i.test(location.hostname);
+  const useNetlify = CFG.remote === 'netlify' || (CFG.remote === 'auto' && onNetlify);
+  const MAX_REMOTE_BYTES = 6 * 1024 * 1024;
+
+  // Returns the payload to send remotely; drops files if the body would be too large.
+  function remotePayload(req) {
+    let payload = JSON.stringify(req);
+    if (payload.length > MAX_REMOTE_BYTES) {
+      payload = JSON.stringify({ ...req, files: req.files.map(f => ({ ...f, dataUrl: undefined })), filesOmitted: true });
+    }
+    return payload;
+  }
+
+  async function sendRemote(req) {
+    if (useNetlify) {
+      const body = new URLSearchParams({
+        'form-name': 'website-request',
+        name: req.client.fullName,
+        email: req.client.email,
+        business: req.business.name || '',
+        request_id: req.id,
+        payload: remotePayload(req)
+      });
+      const res = await fetch('/', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body });
+      if (!res.ok) throw new Error(`Netlify returned ${res.status}`);
+      return 'netlify';
+    }
+    if (CFG.endpoint) {
+      const res = await fetch(CFG.endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: remotePayload(req) });
+      if (!res.ok) throw new Error(`Endpoint returned ${res.status}`);
+      return 'endpoint';
+    }
+    return null;
+  }
+
   // ── Submit ──────────────────────────────────────────────────
-  form.addEventListener('submit', (e) => {
+  form.addEventListener('submit', async (e) => {
     e.preventDefault();
     if (!validate()) return;
 
     const btn = $('#submitBtn');
     btn.disabled = true;
-    btn.querySelector('span').textContent = 'Saving';
+    btn.querySelector('span').textContent = 'Sending';
 
     const req = collect();
     lastRequest = req;
 
     saveLocal(req);
+
+    let sent = null, sendError = null;
+    try { sent = await sendRemote(req); } catch (err) { sendError = err; console.warn('Remote send failed:', err); }
+
     download(req);
 
     $('#successName').textContent = req.client.fullName;
     $('#successEmail').textContent = req.client.email;
     $('#successFile').textContent = fileNameFor(req);
+    const emailNote = CFG.contactEmail ? ` Email it to ${CFG.contactEmail}.` : ' Email it to us.';
+    if (sent) {
+      $('#successMain').innerHTML = `Thanks, <strong>${escapeHtml(req.client.fullName)}</strong>. Your request has been sent.`;
+      $('#successSub').innerHTML = `A copy, <code>${escapeHtml(fileNameFor(req))}</code>, has been downloaded to your device. We will reply to <strong>${escapeHtml(req.client.email)}</strong>.`;
+    } else {
+      $('#successMain').innerHTML = `Thanks, <strong>${escapeHtml(req.client.fullName)}</strong>. Your request file has been downloaded.`;
+      $('#successSub').innerHTML = `${sendError ? 'Automatic sending did not work, so please' : 'Please'} send <code>${escapeHtml(fileNameFor(req))}</code> to us.${escapeHtml(emailNote)} We will reply to <strong>${escapeHtml(req.client.email)}</strong>.`;
+    }
 
     form.hidden = true;
     success.hidden = false;
@@ -178,6 +320,7 @@
 
   $('#newRequest').addEventListener('click', () => {
     form.reset();
+    files.length = 0; renderFiles();
     counter.textContent = '0 characters';
     success.hidden = true;
     form.hidden = false;

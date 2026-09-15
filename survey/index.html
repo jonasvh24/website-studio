@@ -7,7 +7,7 @@
   <meta name="description" content="Request form for a new website.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=3">
+  <link rel="stylesheet" href="styles.css?v=4">
 </head>
 <body>
   <main class="page">
@@ -171,6 +171,45 @@
         </div>
       </section>
 
+      <!-- DOMAIN AND FILES -->
+      <section class="section">
+        <div class="section-head">
+          <span class="step-num">05</span>
+          <div>
+            <h2>Domain and files</h2>
+            <p>Optional. Connect a domain you already own and add photos or documents we should use.</p>
+          </div>
+        </div>
+
+        <div class="grid two">
+          <div class="field">
+            <label for="domainName">Existing domain</label>
+            <input id="domainName" name="domainName" type="text" placeholder="yourbusiness.com" autocomplete="off">
+          </div>
+          <div class="field">
+            <label for="domainRegistrar">Where is it registered or hosted?</label>
+            <input id="domainRegistrar" name="domainRegistrar" type="text" placeholder="GoDaddy, Namecheap, Squarespace, not sure">
+          </div>
+        </div>
+        <div class="field">
+          <label class="checkline">
+            <input type="checkbox" name="domainAccess" value="yes">
+            <span>I can log in to the registrar or give DNS access so the new site can be connected</span>
+          </label>
+        </div>
+
+        <div class="field">
+          <label for="fileInput">Photos and files</label>
+          <input id="fileInput" type="file" multiple accept="image/*,.pdf,.doc,.docx,.txt,.md" hidden>
+          <div class="dropzone" id="fileDrop">
+            <strong>Add photos or files</strong>
+            <span>Logo, photos of you or your business, menus, price lists, brochures. Images are resized in your browser before sending.</span>
+          </div>
+          <div class="file-list" id="fileList"></div>
+          <span class="error" id="fileError"></span>
+        </div>
+      </section>
+
       <div class="actions">
         <p class="fineprint">Submitting saves a JSON file to your device. Send it to us by email to start the project.</p>
         <button type="submit" class="btn btn-primary" id="submitBtn">
@@ -186,8 +225,8 @@
         <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
       </div>
       <h2>Request saved</h2>
-      <p>Thanks, <strong id="successName"></strong>. The file <code id="successFile"></code> has been downloaded.</p>
-      <p class="muted">Send that file to us. We will reply to <strong id="successEmail"></strong>.</p>
+      <p id="successMain">Thanks, <strong id="successName"></strong>. Your request has been sent.</p>
+      <p class="muted" id="successSub">A copy, <code id="successFile"></code>, has been downloaded to your device. We will reply to <strong id="successEmail"></strong>.</p>
       <div class="success-actions">
         <button type="button" class="btn btn-ghost" id="downloadAgain">Download JSON again</button>
         <button type="button" class="btn btn-ghost" id="newRequest">Submit another request</button>
@@ -197,6 +236,17 @@
     <footer class="foot">Your answers stay on your device until you send the file.</footer>
   </main>
 
-  <script src="survey.js?v=3"></script>
+  <!-- Static copy for Netlify Forms detection. The real submission is sent from survey.js. -->
+  <form name="website-request" method="POST" data-netlify="true" netlify-honeypot="bot-field" hidden>
+    <input type="text" name="name">
+    <input type="email" name="email">
+    <input type="text" name="business">
+    <input type="text" name="request_id">
+    <textarea name="payload"></textarea>
+    <input type="text" name="bot-field">
+  </form>
+
+  <script src="config.js?v=4"></script>
+  <script src="survey.js?v=4"></script>
 </body>
 </html>

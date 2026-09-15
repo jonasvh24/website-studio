@@ -1,0 +1,3 @@
+# Netlify: publishes only the survey. Forms are detected from survey/index.html.
+[build]
+  publish = "survey"

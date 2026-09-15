@@ -5,22 +5,35 @@
     "baseUrl": "http://localhost:11434",
     "model": "qwen2.5:14b",
     "temperature": 0.4,
-    "numCtx": 16384,
-    "maxTokens": 8192
+    "numCtx": 32768,
+    "maxTokens": 16000
   },
   "openaiCompatible": {
-    "enabled": false,
+    "enabled": true,
     "label": "Kimi",
     "baseUrl": "https://api.moonshot.ai/v1",
-    "model": "kimi-k2-0711-preview",
+    "model": "auto",
     "apiKey": "",
-    "temperature": 0.4,
-    "maxTokens": 8192
+    "temperature": 0.5,
+    "maxTokens": 16000
   },
   "googlePlaces": {
     "apiKey": "",
     "maxPhotos": 6,
     "maxReviews": 5,
     "photoMaxWidth": 1400
+  },
+  "provider": "auto",
+  "inbox": {
+    "watchFolders": [
+      "~/Downloads"
+    ],
+    "pollSeconds": 5
+  },
+  "netlify": {
+    "token": "",
+    "siteId": "",
+    "formName": "website-request",
+    "pollSeconds": 60
   }
 }

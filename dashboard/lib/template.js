@@ -37,9 +37,17 @@ function firstName(full) {
   return (full || 'there').trim().split(/\s+/)[0];
 }
 
-function generateSite(req, business) {
+function generateSite(req, business, uploads) {
   const c = req.client || {}, w = req.website || {}, s = req.social || {};
   const b = business || null;
+  const up = (uploads || []).filter(f => f.stored !== false);
+  const upImages = up.filter(f => f.kind === 'image');
+  const upDocs = up.filter(f => f.kind !== 'image');
+  const logo = upImages.find(f => /logo/i.test(f.name));
+  const gallery = [...upImages.filter(f => f !== logo).map(f => ({ file: f.name, alt: f.name })), ...((b?.photos || []).map((p, i) => ({ file: p.file, alt: `${b.name} photo ${i + 1}` })))];
+  const heroImg = gallery[0];
+  const bookable = /book|booking|appointment|reserve/i.test(w.description || '');
+  const bookHref = `mailto:${c.email || ''}?subject=${encodeURIComponent('Booking request')}&body=${encodeURIComponent('Name:\nPhone:\nPreferred date and time:\nService:\n')}`;
   const name = b?.name || c.fullName || 'Your Name';
   const title = c.title || b?.type || `${w.type || 'Personal'} Website`;
   const accent = pickAccent(w.colorPreference);
@@ -79,7 +87,7 @@ function generateSite(req, business) {
 <body>
   <header class="site-header">
     <nav class="nav container" aria-label="Main">
-      <a class="brand" href="#top">${esc(fn)}<span class="dot">.</span></a>
+      <a class="brand" href="#top">${logo ? `<img class="logo" src="assets/${esc(logo.name)}" alt="${esc(name)}">` : `${esc(fn)}<span class="dot">.</span>`}</a>
       <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
         <span></span><span></span><span></span>
       </button>
@@ -88,6 +96,7 @@ function generateSite(req, business) {
         <li><a href="#work">Work</a></li>
         ${b?.reviews?.length ? '<li><a href="#reviews">Reviews</a></li>' : ''}
         <li><a href="#contact">Contact</a></li>
+        ${bookable ? `<li><a class="btn btn-primary btn-nav" href="${bookHref}">Book now</a></li>` : ''}
       </ul>
     </nav>
   </header>
@@ -98,16 +107,23 @@ function generateSite(req, business) {
       <h1 class="reveal"><span class="accent">${esc(name)}</span></h1>
       <p class="lead reveal">${esc(bio)}</p>
       <div class="hero-actions reveal">
-        <a class="btn btn-primary" href="#work">Work</a>
+        ${bookable ? `<a class="btn btn-primary" href="${bookHref}">Book now</a>` : `<a class="btn btn-primary" href="#work">Work</a>`}
         <a class="btn" href="#contact">Contact</a>
       </div>
-      ${b?.photos?.[0] ? `<img class="hero-img reveal" src="assets/${esc(b.photos[0].file)}" alt="${esc(b.name)}">` : ''}
+      ${heroImg ? `<img class="hero-img reveal" src="assets/${esc(heroImg.file)}" alt="${esc(heroImg.alt)}">` : ''}
     </section>
-${b?.photos?.length > 1 ? `
+${gallery.length > 1 ? `
     <section id="gallery" class="section container">
       <h2 class="reveal">Gallery</h2>
       <div class="gallery">
-        ${b.photos.slice(1).map((p, i) => `<img class="reveal" src="assets/${esc(p.file)}" alt="${esc(b.name)} photo ${i + 2}" loading="lazy">`).join('\n        ')}
+        ${gallery.slice(1).map(g => `<img class="reveal" src="assets/${esc(g.file)}" alt="${esc(g.alt)}" loading="lazy">`).join('\n        ')}
+      </div>
+    </section>` : ''}
+${upDocs.length ? `
+    <section id="downloads" class="section container">
+      <h2 class="reveal">Downloads</h2>
+      <div class="socials reveal">
+        ${upDocs.map(f => `<a href="assets/${esc(f.name)}" download>${esc(f.name)}</a>`).join('\n        ')}
       </div>
     </section>` : ''}
 ${b?.reviews?.length ? `
@@ -153,7 +169,7 @@ ${b?.reviews?.length ? `
   </main>
 
   <footer class="footer container">
-    <p>&copy; <span id="year"></span> ${esc(name)}. All rights reserved.</p>
+    <p>&copy; <span id="year"></span> ${esc(name)}. All rights reserved.${req.domain?.name ? ` ${esc(req.domain.name)}` : ''}</p>
   </footer>
 
   <script src="script.js"></script>
@@ -191,6 +207,8 @@ a:hover { text-decoration: underline; }
 .nav { display: flex; align-items: center; justify-content: space-between; height: 68px; }
 .brand { font-weight: 800; font-size: 20px; color: var(--text); letter-spacing: -0.02em; }
 .brand .dot { color: var(--accent); }
+.brand .logo { height: 36px; width: auto; display: block; }
+.btn-nav { padding: 9px 16px; font-size: 14px; }
 .nav-links { list-style: none; display: flex; gap: 28px; margin: 0; padding: 0; }
 .nav-links a { color: var(--text-2); font-weight: 500; font-size: 15px; }
 .nav-links a:hover { color: var(--text); text-decoration: none; }

@@ -33,7 +33,9 @@ website-studio/
 
 ## Part 1 — Survey
 
-**Live:** <https://jonasvh24.github.io/website-studio/> (auto-deployed from `survey/` on every push to `main` via `.github/workflows/pages.yml`).
+**Live:** <https://jonasvh24.github.io/website-studio/> (auto-deployed from `survey/` on every push to `main` via `.github/workflows/pages.yml`). On GitHub Pages there is no form backend, so the customer downloads the JSON and emails it; host on Netlify (see below) to receive submissions automatically.
+
+Settings live in `survey/config.js`: contact email shown to the customer, remote mode (`netlify`, `auto`, or none), an optional custom endpoint, and upload limits.
 
 You can also open `survey/index.html` directly, or deploy the `survey/` folder to Netlify / Vercel / any static host.
 
@@ -55,6 +57,8 @@ The client sends you the JSON file (or you collect it however you like).
   "website": { "type", "description", "stylePreferences": [], "colorPreference" },
   "social":  { "github", "linkedin", "twitter", "currentWebsite" },
   "business": { "name", "location", "usePublicData": true },
+  "domain":   { "name", "registrar", "canGiveAccess": false },
+  "files":    [ { "name", "type", "size", "kind": "image|document", "dataUrl": "data:..." } ],
   "extraNotes": "",
   "meta": { "userAgent", "language", "source": "public-survey" }
 }
@@ -78,6 +82,25 @@ The client sends you the JSON file (or you collect it however you like).
 | **3 · Build** | Click **Build Website**. The local model streams progress; the result is saved as a new version. |
 | **4 · Preview** | Live iframe with desktop / tablet / mobile widths and a version switcher. |
 | **5 · Deliver** | **Request Rebuild** (with feedback → new version) or **Transfer Ownership – Download ZIP**. The client's email is shown prominently when the download starts and finishes. |
+
+### How requests reach the dashboard
+
+Three ways, all automatic once set up:
+
+1. **Watched folders.** The dashboard watches `~/Downloads` (and `dashboard/data/inbox/`) every 5 seconds and imports any `website-request_*.json` it finds. Filling in the survey on this machine is enough; the downloaded file is picked up within seconds. Nothing is moved or deleted; a ledger in `data/inbox-ledger.json` remembers what was imported.
+2. **Netlify Forms** (for customers on other machines). Host the survey on Netlify; the survey posts every submission to Netlify Forms and the dashboard pulls them every 60 seconds. Setup:
+   ```bash
+   npx netlify-cli login                       # one time, opens the browser
+   npx netlify-cli deploy --prod --dir=survey  # creates the site, prints the URL
+   ```
+   Submit the form once on the new URL so Netlify registers it, then put a personal access token (Netlify: User settings, Applications) and the site id (Site settings, General) in `dashboard/config.local.json`:
+   ```json
+   { "netlify": { "token": "nfp_...", "siteId": "xxxxxxxx-xxxx-..." } }
+   ```
+   The **Check now** button on step 1 syncs immediately.
+3. **Manual.** Import JSON files with the button or drag and drop, or paste any endpoint that accepts a JSON POST into `survey/config.js` (`endpoint`).
+
+Photos and documents the customer attached are embedded in the JSON (images are resized in the browser first) and unpacked to `data/uploads/<id>/` on import. They are copied into every build under `assets/` and included in the ZIP.
 
 ### About "Load from browser storage"
 
@@ -108,7 +131,19 @@ Google's terms require attribution when you show their reviews and photos; the p
 
 ### Models
 
-Edit `dashboard/config.json`:
+Order of preference: **Kimi** (Moonshot, cloud) if a key is configured, then **Ollama** (local), then the built-in template. Each build has a model picker on step 3.
+
+To use Kimi, get a key at platform.moonshot.ai and add it to `dashboard/config.local.json`:
+
+```json
+{ "openaiCompatible": { "apiKey": "sk-..." } }
+```
+
+With `"model": "auto"` (the default) the newest Kimi generation the API lists is used (K3 if available, otherwise K2.5, K2). Set an explicit model id to pin one.
+
+Local models: `qwen2.5:14b` takes about 5 minutes per site; `qwen2.5:72b` gives better results but about 25 minutes.
+
+Edit `dashboard/config.json` (or override in `config.local.json`):
 
 ```jsonc
 {

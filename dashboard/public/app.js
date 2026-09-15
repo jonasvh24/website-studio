@@ -76,23 +76,61 @@
   async function loadStatus() {
     const pill = $('#modelStatus');
     const dot = $('.status-dot', pill), txt = pill.lastElementChild;
+    const sel = $('#modelSelect');
     try {
       const { providers } = await api('/api/status');
-      if (providers.ollama.ok) {
-        const m = providers.ollama.models.includes(providers.ollama.preferred) ? providers.ollama.preferred : providers.ollama.models[0];
-        dot.className = 'status-dot ok'; txt.textContent = `Ollama: ${m}`;
-        $('#modelLine').textContent = `Model: Ollama / ${m}. ${providers.ollama.models.length} model(s) available locally.`;
-      } else if (providers.openaiCompatible.ok) {
-        dot.className = 'status-dot ok'; txt.textContent = `${providers.openaiCompatible.label}: ${providers.openaiCompatible.model}`;
-        $('#modelLine').textContent = `Ollama offline. Using ${providers.openaiCompatible.label}.`;
+      const k = providers.openaiCompatible, o = providers.ollama;
+      const opts = [];
+      if (k.ok) {
+        opts.push(`<optgroup label="${esc(k.label)} (cloud)">${k.models.map(m => `<option value="kimi:${esc(m)}" ${m === k.preferred ? 'selected' : ''}>${esc(m)}</option>`).join('')}</optgroup>`);
+      }
+      if (o.ok) {
+        const pref = o.models.includes(o.preferred) ? o.preferred : o.models[0];
+        const note = (m) => /72b|70b/.test(m) ? ' (best local quality, about 25 min)' : /14b/.test(m) ? ' (about 5 min)' : /8b|7b/.test(m) ? ' (fast, lower quality)' : '';
+        opts.push(`<optgroup label="Ollama (local)">${o.models.map(m => `<option value="ollama:${esc(m)}" ${!k.ok && m === pref ? 'selected' : ''}>${esc(m)}${note(m)}</option>`).join('')}</optgroup>`);
+      }
+      sel.innerHTML = opts.join('') || '<option value="">Built-in template (no model)</option>';
+
+      if (k.ok) {
+        dot.className = 'status-dot ok'; txt.textContent = `${k.label}: ${k.preferred}`;
+        $('#modelLine').textContent = `${k.label} is the default builder. ${o.ok ? 'Ollama is available as a local alternative.' : ''}`;
+      } else if (o.ok) {
+        const pref = o.models.includes(o.preferred) ? o.preferred : o.models[0];
+        dot.className = 'status-dot ok'; txt.textContent = `Ollama: ${pref}`;
+        $('#modelLine').textContent = k.hasKey ? `${k.label} key set but unreachable (${k.error || 'error'}). Using Ollama.` : `Local model. Add a Kimi API key in config.local.json to use Kimi.`;
       } else {
         dot.className = 'status-dot warn'; txt.textContent = 'No model. Template mode';
-        $('#modelLine').textContent = 'No local model reachable. Builds will use the built-in template generator. Start Ollama for model builds.';
+        $('#modelLine').textContent = 'No model reachable. Builds will use the built-in template generator. Start Ollama or add a Kimi API key.';
       }
     } catch {
       dot.className = 'status-dot bad'; txt.textContent = 'Server unreachable';
     }
   }
+
+  // ── Inbox (watched folders + Netlify) ─────────────────────
+  async function loadInbox() {
+    try {
+      const st = await api('/api/inbox');
+      const folders = st.folders.map(f => f.replace(/^\/Users\/[^/]+/, '~')).join(', ');
+      let t = `Watching ${folders} for survey files.`;
+      if (st.netlify.configured) t += st.netlify.ok === false ? ` Netlify: ${st.netlify.error}` : ` Netlify Forms connected${st.netlify.at ? ', checked ' + new Date(st.netlify.at).toLocaleTimeString() : ''}.`;
+      else t += ' Netlify Forms not connected.';
+      $('#inboxText').textContent = t;
+    } catch { /* ignore */ }
+  }
+
+  $('#inboxSyncBtn').addEventListener('click', async () => {
+    const b = $('#inboxSyncBtn'); b.disabled = true; b.textContent = 'Checking';
+    try {
+      const r = await api('/api/inbox/sync', { method: 'POST' });
+      await loadRequests(); await loadInbox();
+      toast(r.imported.length ? `${r.imported.length} new request(s) imported` : (r.netlifyError ? `Netlify: ${r.netlifyError}` : 'No new requests'), !!r.netlifyError);
+    } catch (err) { toast(err.message, true); }
+    finally { b.disabled = false; b.textContent = 'Check now'; }
+  });
+
+  // Poll the request list while on step 1 so auto-imported files show up.
+  setInterval(() => { if (state.step === 1 && !state.building) { loadRequests(); loadInbox(); } }, 8000);
 
   // ── Step 1: requests ──────────────────────────────────────
   async function loadRequests() {
@@ -155,7 +193,7 @@
 
   $('#importBtn').addEventListener('click', () => $('#fileInput').click());
   $('#fileInput').addEventListener('change', (e) => { importFiles([...e.target.files]); e.target.value = ''; });
-  $('#refreshBtn').addEventListener('click', () => { loadRequests(); loadStatus(); });
+  $('#refreshBtn').addEventListener('click', () => { loadRequests(); loadStatus(); loadInbox(); });
 
   $('#localStorageBtn').addEventListener('click', async () => {
     let list = [];
@@ -187,7 +225,7 @@
   function renderReview() {
     const r = state.current, c = r.client, w = r.website, s = r.social;
     $('#reviewName').textContent = c.fullName;
-    $('#reviewSub').textContent = `${w.type || 'Website'}. Submitted ${fmtDate(r.submittedAt)}. ${r.builds?.length || 0} build(s)`;
+    $('#reviewSub').textContent = `${w.type || 'Website'}. Submitted ${fmtDate(r.submittedAt)}. Received via ${r.importSource || 'import'}. ${r.builds?.length || 0} build(s)`;
 
     const colorHex = /#([0-9a-f]{6}|[0-9a-f]{3})\b/i.exec(w.colorPreference || '')?.[0];
 
@@ -229,6 +267,22 @@
       <div class="review-block">
         <h3>Extra notes</h3>
         <p class="prose ${r.extraNotes ? '' : 'empty-val'}">${esc(r.extraNotes || 'None')}</p>
+      </div>
+      <div class="review-block">
+        <h3>Domain</h3>
+        <dl class="kv">
+          ${kv('Existing domain', r.domain?.name)}
+          ${kv('Registrar / host', r.domain?.registrar)}
+          <dt>DNS access</dt><dd>${r.domain?.name ? (r.domain?.canGiveAccess ? 'Client can give access' : 'Client has not confirmed access') : '<span class="empty-val">Not provided</span>'}</dd>
+        </dl>
+      </div>
+      <div class="review-block">
+        <h3>Client files (${(r.files || []).length})</h3>
+        ${(r.files || []).length ? `<div class="file-grid">${r.files.map(f => `
+          <div class="file-tile" title="${esc(f.name)}">
+            ${f.kind === 'image' && f.stored ? `<img src="/uploads/${esc(r.id)}/${esc(f.name)}" alt="">` : `<div class="doc">${esc((f.name.split('.').pop() || 'FILE').toUpperCase().slice(0, 5))}</div>`}
+            <div class="fname">${esc(f.name)}${f.stored ? '' : ' (not received)'}</div>
+          </div>`).join('')}</div>` : '<span class="empty-val">None</span>'}
       </div>
       <div class="review-block full" id="bizBlock">
         <h3>Business listing</h3>
@@ -348,9 +402,12 @@
       ? `Version ${n} exists. Building again creates version ${n + 1}; earlier versions stay available in the preview.`
       : 'The local model will generate a complete responsive site (HTML + CSS + JS) from everything the client provided.';
     const bz = state.business;
-    $('#bizLine').textContent = bz && r.business?.usePublicData !== false
-      ? `Business listing attached: ${bz.name}. ${bz.reviews.length} review(s) and ${bz.photos.length} photo(s) will be used.`
-      : (r.business?.name ? 'No business listing attached. Go back to Review to find it, or build without it.' : '');
+    const nFiles = (r.files || []).filter(f => f.stored).length;
+    const parts = [];
+    if (bz && r.business?.usePublicData !== false) parts.push(`Business listing: ${bz.name}, ${bz.reviews.length} review(s), ${bz.photos.length} photo(s).`);
+    else if (r.business?.name) parts.push('No business listing attached. Go back to Review to find it, or build without it.');
+    if (nFiles) parts.push(`${nFiles} client file(s) will be used.`);
+    $('#bizLine').textContent = parts.join(' ');
     $('#feedbackBox').hidden = !state.feedback;
     $('#feedbackText').textContent = state.feedback;
     $('#buildBtn').querySelector('span').textContent = n ? 'Rebuild Website' : 'Build Website';
@@ -388,7 +445,7 @@
     try {
       const res = await fetch(`/api/requests/${state.current.id}/build`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ feedback: state.feedback })
+        body: JSON.stringify({ feedback: state.feedback, model: $('#modelSelect').value || undefined })
       });
       if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
 
@@ -521,6 +578,6 @@
   // ── Init ──────────────────────────────────────────────────
   (async () => {
     goto(1);
-    await Promise.all([loadRequests(), loadStatus()]);
+    await Promise.all([loadRequests(), loadStatus(), loadInbox()]);
   })();
 })();

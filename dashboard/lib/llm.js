@@ -35,14 +35,15 @@ async function readNdjson(res, onLine) {
   if (buf.trim()) onLine(buf.trim());
 }
 
-async function viaOllama(prompt, { ollama, onToken, onStatus, signal }) {
+async function viaOllama(prompt, { ollama, onToken, onStatus, signal, modelOverride }) {
   const base = ollama.baseUrl.replace(/\/$/, '');
   const available = await ollamaModels(base);
   if (!available.length) throw new Error('Ollama is running but has no models pulled.');
 
-  // Use configured model if present; otherwise the first available.
-  const model = available.includes(ollama.model) ? ollama.model
-    : available.find(m => m.startsWith(ollama.model.split(':')[0])) || available[0];
+  // Explicit override, else configured model if present, else closest match, else first available.
+  const want = modelOverride || ollama.model;
+  const model = available.includes(want) ? want
+    : available.find(m => m.startsWith(want.split(':')[0])) || available[0];
 
   onStatus?.(`Ollama: ${model}`);
 
@@ -76,9 +77,41 @@ async function viaOllama(prompt, { ollama, onToken, onStatus, signal }) {
   return { text, provider: 'ollama', model };
 }
 
-async function viaOpenAICompat(prompt, { openai, onToken, onStatus, signal }) {
+function compatKey(openai) {
+  return openai.apiKey || process.env.KIMI_API_KEY || process.env.MOONSHOT_API_KEY || process.env.OPENAI_API_KEY || '';
+}
+
+// Preference order when model is "auto": newest Kimi generation first.
+const KIMI_PREFERENCE = [/k3/i, /k2[.\-]?5/i, /k2.*think/i, /k2/i, /kimi-latest/i, /kimi/i];
+
+async function compatModels(openai) {
   const base = openai.baseUrl.replace(/\/$/, '');
-  const apiKey = openai.apiKey || process.env.KIMI_API_KEY || process.env.OPENAI_API_KEY || 'local';
+  const res = await fetch(`${base}/models`, {
+    headers: { Authorization: `Bearer ${compatKey(openai) || 'local'}` }, signal: AbortSignal.timeout(8000)
+  });
+  if (!res.ok) throw new Error(`${openai.label || 'Endpoint'} models HTTP ${res.status}`);
+  const json = await res.json();
+  return (json.data || []).map(m => m.id).filter(Boolean);
+}
+
+function pickCompatModel(openai, available) {
+  if (openai.model && openai.model !== 'auto') return openai.model;
+  for (const re of KIMI_PREFERENCE) {
+    const hits = available.filter(id => re.test(id)).sort().reverse();
+    if (hits.length) return hits[0];
+  }
+  return available[0];
+}
+
+async function viaOpenAICompat(prompt, { openai, onToken, onStatus, signal, modelOverride }) {
+  const base = openai.baseUrl.replace(/\/$/, '');
+  const apiKey = compatKey(openai) || 'local';
+  let model = modelOverride;
+  if (!model) {
+    const available = await compatModels(openai).catch(() => []);
+    model = available.length ? pickCompatModel(openai, available) : (openai.model === 'auto' ? 'kimi-latest' : openai.model);
+  }
+  openai = { ...openai, model };
   onStatus?.(`${openai.label || 'OpenAI-compatible'}: ${openai.model}`);
 
   const res = await fetch(`${base}/chat/completions`, {
@@ -110,26 +143,43 @@ async function viaOpenAICompat(prompt, { openai, onToken, onStatus, signal }) {
   return { text, provider: 'openai-compatible', model: openai.model };
 }
 
-async function generate(prompt, opts) {
-  const { config } = opts;
-  const errors = [];
-
-  if (config.ollama?.enabled !== false) {
-    try {
-      return await viaOllama(prompt, { ...opts, ollama: config.ollama });
-    } catch (err) {
-      if (err.name === 'AbortError') throw err;
-      errors.push(`Ollama: ${err.message}`);
-      opts.onStatus?.(`Ollama unavailable (${err.message}). Trying fallback.`);
-    }
+/**
+ * Provider order:
+ *   modelOverride "kimi:<model>" or "ollama:<model>" forces one provider.
+ *   config.provider "kimi" | "ollama" forces one provider.
+ *   "auto": Kimi (OpenAI-compatible) first when a key is configured, then Ollama.
+ */
+function providerOrder(config, modelOverride) {
+  const compat = config.openaiCompatible || {};
+  const compatReady = compat.enabled !== false && !!compatKey(compat);
+  const ollamaReady = config.ollama?.enabled !== false;
+  if (modelOverride) {
+    const [prov] = modelOverride.split(':');
+    if (prov === 'kimi' || prov === 'compat') return ['compat'];
+    if (prov === 'ollama') return ['ollama'];
   }
+  if (config.provider === 'kimi' || config.provider === 'compat') return ['compat'];
+  if (config.provider === 'ollama') return ['ollama'];
+  const order = [];
+  if (compatReady) order.push('compat');
+  if (ollamaReady) order.push('ollama');
+  return order;
+}
 
-  if (config.openaiCompatible?.enabled) {
+async function generate(prompt, opts) {
+  const { config, modelOverride } = opts;
+  const errors = [];
+  const bare = modelOverride ? modelOverride.replace(/^(kimi|compat|ollama):/, '') : null;
+
+  for (const prov of providerOrder(config, modelOverride)) {
     try {
-      return await viaOpenAICompat(prompt, { ...opts, openai: config.openaiCompatible });
+      if (prov === 'compat') return await viaOpenAICompat(prompt, { ...opts, openai: config.openaiCompatible, modelOverride: bare });
+      if (prov === 'ollama') return await viaOllama(prompt, { ...opts, ollama: config.ollama, modelOverride: bare });
     } catch (err) {
       if (err.name === 'AbortError') throw err;
-      errors.push(`${config.openaiCompatible.label || 'Fallback'}: ${err.message}`);
+      const label = prov === 'compat' ? (config.openaiCompatible.label || 'Endpoint') : 'Ollama';
+      errors.push(`${label}: ${err.message}`);
+      opts.onStatus?.(`${label} unavailable (${err.message}). Trying next provider.`);
     }
   }
 
@@ -139,21 +189,23 @@ async function generate(prompt, opts) {
 }
 
 async function providersStatus(config) {
-  const out = { ollama: { ok: false }, openaiCompatible: { ok: false, enabled: !!config.openaiCompatible?.enabled } };
+  const compat = config.openaiCompatible || {};
+  const out = {
+    ollama: { ok: false, models: [] },
+    openaiCompatible: { ok: false, enabled: compat.enabled !== false, hasKey: !!compatKey(compat), label: compat.label || 'Endpoint', models: [] },
+    order: providerOrder(config, null)
+  };
   try {
     const models = await ollamaModels(config.ollama.baseUrl.replace(/\/$/, ''));
     out.ollama = { ok: true, models, preferred: config.ollama.model };
   } catch (err) { out.ollama.error = err.message; }
 
-  if (config.openaiCompatible?.enabled) {
+  if (out.openaiCompatible.enabled && out.openaiCompatible.hasKey) {
     try {
-      const res = await fetch(`${config.openaiCompatible.baseUrl.replace(/\/$/, '')}/models`, {
-        headers: { Authorization: `Bearer ${config.openaiCompatible.apiKey || process.env.KIMI_API_KEY || 'local'}` },
-        signal: AbortSignal.timeout(3000)
-      });
-      out.openaiCompatible.ok = res.ok;
-      out.openaiCompatible.label = config.openaiCompatible.label;
-      out.openaiCompatible.model = config.openaiCompatible.model;
+      const models = await compatModels(compat);
+      out.openaiCompatible.ok = true;
+      out.openaiCompatible.models = models.filter(m => /kimi|moonshot/i.test(m)).length ? models.filter(m => /kimi|moonshot/i.test(m)) : models;
+      out.openaiCompatible.preferred = pickCompatModel(compat, models);
     } catch (err) { out.openaiCompatible.error = err.message; }
   }
   return out;

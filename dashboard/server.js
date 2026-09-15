@@ -32,6 +32,7 @@ const { buildPrompt, parseOutput, FILES } = require('./lib/prompt');
 const { generateSite } = require('./lib/template');
 const llm = require('./lib/llm');
 const places = require('./lib/places');
+const { Inbox } = require('./lib/inbox');
 
 const ROOT = __dirname;
 const PUBLIC = path.join(ROOT, 'public');
@@ -40,6 +41,7 @@ const DATA = path.join(ROOT, 'data');
 const REQUESTS = path.join(DATA, 'requests');
 const BUILDS = path.join(DATA, 'builds');
 const BUSINESS = path.join(DATA, 'business');
+const UPLOADS = path.join(DATA, 'uploads');
 
 // config.json is committed; config.local.json (git-ignored) overrides it, e.g. for API keys.
 const config = JSON.parse(fs.readFileSync(path.join(ROOT, 'config.json'), 'utf8'));
@@ -58,7 +60,7 @@ const MIME = {
   '.woff2': 'font/woff2', '.txt': 'text/plain; charset=utf-8'
 };
 
-for (const d of [REQUESTS, BUILDS, BUSINESS]) fs.mkdirSync(d, { recursive: true });
+for (const d of [REQUESTS, BUILDS, BUSINESS, UPLOADS]) fs.mkdirSync(d, { recursive: true });
 
 // ── helpers ─────────────────────────────────────────────────────────
 const safeId = (id) => /^[\w\-]{1,80}$/.test(id);
@@ -108,6 +110,8 @@ function normalizeRequest(raw) {
   r.website = r.website || { type: r.websiteType, description: r.description, stylePreferences: r.stylePreferences || [], colorPreference: r.colorPreference };
   r.social = r.social || { github: r.github, linkedin: r.linkedin, twitter: r.twitter, currentWebsite: r.currentWebsite };
   r.business = r.business || { name: r.businessName || '', location: r.businessLocation || '', usePublicData: r.usePublicData !== false };
+  r.domain = r.domain || { name: r.domainName || '', registrar: r.domainRegistrar || '', canGiveAccess: !!r.domainAccess };
+  r.files = Array.isArray(r.files) ? r.files : [];
   r.extraNotes = r.extraNotes || '';
   if (!r.client.fullName || !r.client.email) throw new Error('Request needs client.fullName and client.email');
   if (!r.id || !safeId(r.id)) r.id = `req_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -134,6 +138,41 @@ async function getRequest(id) {
 
 async function saveRequest(r) {
   await fsp.writeFile(path.join(REQUESTS, `${r.id}.json`), JSON.stringify(r, null, 2));
+}
+
+const safeFileName = (n) => String(n || 'file').replace(/[^\w.\-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 80) || 'file';
+
+/** Normalize, unpack embedded files to data/uploads/<id>/, save. Returns the stored request. */
+async function importRequest(raw, meta = {}) {
+  const r = normalizeRequest(raw);
+  const existing = await getRequest(r.id);
+  if (existing) return existing;               // already imported (same id)
+  const dir = path.join(UPLOADS, r.id);
+  const files = [];
+  const used = new Set();
+  for (const f of r.files) {
+    if (!f || !f.name) continue;
+    let name = safeFileName(f.name);
+    while (used.has(name)) name = name.replace(/(\.[^.]*)?$/, (ext) => `_${used.size}${ext}`);
+    used.add(name);
+    const entry = { name, type: f.type || '', size: f.size || 0, width: f.width, height: f.height, kind: f.kind || (String(f.type).startsWith('image/') ? 'image' : 'document') };
+    const m = /^data:([^;]+);base64,(.+)$/s.exec(f.dataUrl || '');
+    if (m) {
+      await fsp.mkdir(dir, { recursive: true });
+      await fsp.writeFile(path.join(dir, name), Buffer.from(m[2], 'base64'));
+      entry.stored = true;
+    } else {
+      entry.stored = false;                      // metadata only (files omitted by sender)
+    }
+    files.push(entry);
+  }
+  r.files = files;
+  r.importedAt = new Date().toISOString();
+  r.importSource = meta.source || 'api';
+  if (meta.file) r.importFile = meta.file;
+  if (meta.submissionId) r.netlifySubmissionId = meta.submissionId;
+  await saveRequest(r);
+  return r;
 }
 
 async function listBuilds(id) {
@@ -175,6 +214,7 @@ async function handleBuild(req, res, id) {
   let body = {};
   try { body = JSON.parse((await readBody(req)) || '{}'); } catch { /* ignore */ }
   const feedback = (body.feedback || '').trim();
+  const modelOverride = typeof body.model === 'string' && /^[\w.:\-\/]+$/.test(body.model) ? body.model : null;
 
   res.writeHead(200, {
     'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive', 'X-Accel-Buffering': 'no'
@@ -189,13 +229,14 @@ async function handleBuild(req, res, id) {
 
   const started = Date.now();
   const business = request.business?.usePublicData === false ? null : await getBusiness(id);
-  const prompt = buildPrompt(request, feedback, business);
+  const uploads = (request.files || []).filter(f => f.stored);
+  const prompt = buildPrompt(request, feedback, business, uploads);
   let files, provider = 'template', model = 'built-in', warnings = [];
 
   try {
     emit('status', { message: 'Contacting local model' });
     const { text, provider: p, model: m } = await llm.generate(prompt, {
-      config,
+      config, modelOverride,
       signal: ac.signal,
       onStatus: (message) => emit('status', { message }),
       onToken: (_t, total) => emit('progress', { chars: total })
@@ -206,7 +247,7 @@ async function handleBuild(req, res, id) {
     const parsed = parseOutput(text);
     files = parsed.files;
     if (parsed.missing.length) {
-      const fallback = generateSite(request, business);
+      const fallback = generateSite(request, business, uploads);
       for (const f of parsed.missing) files[f] = fallback[f];
       warnings.push(`Model did not return ${parsed.missing.join(', ')}; filled from template.`);
     }
@@ -217,7 +258,7 @@ async function handleBuild(req, res, id) {
     if (ac.signal.aborted) { clearInterval(ping); return res.end(); }
     if (!err.noModel) console.error('[build]', err);
     emit('status', { message: `${err.message}. Using the built-in template generator.` });
-    files = generateSite(request, business);
+    files = generateSite(request, business, uploads);
     warnings.push(`No model output (${err.message}). Built with the template generator instead.`);
   }
 
@@ -227,16 +268,20 @@ async function handleBuild(req, res, id) {
   const dir = path.join(BUILDS, id, `v${version}`);
   await fsp.mkdir(dir, { recursive: true });
   for (const [name, content] of Object.entries(files)) await fsp.writeFile(path.join(dir, name), content);
-  if (business?.photos?.length) {
+  if (business?.photos?.length || uploads.length) {
     await fsp.mkdir(path.join(dir, 'assets'), { recursive: true });
-    for (const ph of business.photos) {
+    for (const ph of (business?.photos || [])) {
       await fsp.copyFile(path.join(bizPhotoDir(id), ph.file), path.join(dir, 'assets', ph.file)).catch(() => {});
+    }
+    for (const f of uploads) {
+      await fsp.copyFile(path.join(UPLOADS, id, f.name), path.join(dir, 'assets', f.name)).catch(() => {});
     }
   }
 
   const meta = {
     version, provider, model, feedback, warnings,
     business: business ? { name: business.name, rating: business.rating, reviews: business.reviews.length, photos: business.photos.length } : null,
+    uploads: uploads.length,
     createdAt: new Date().toISOString(),
     durationMs: Date.now() - started,
     sizes: Object.fromEntries(Object.entries(files).map(([k, v]) => [k, Buffer.byteLength(v)]))
@@ -300,6 +345,9 @@ Text marked [Add ...] is a placeholder. Replace it with your own content.
   res.end(zip);
 }
 
+// ── inbox (watched folders + Netlify Forms) ─────────────────────────
+const inbox = new Inbox({ config, dataDir: DATA, importRequest });
+
 // ── router ──────────────────────────────────────────────────────────
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
@@ -311,13 +359,20 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, { ok: true, providers: await llm.providersStatus(config), places: places.isConfigured(config), config: { ollamaModel: config.ollama.model, port: PORT } });
     }
     if (p === '/api/requests' && req.method === 'GET') return send(res, 200, await listRequests());
+    if (p === '/api/inbox' && req.method === 'GET') return send(res, 200, inbox.status());
+    if (p === '/api/inbox/sync' && req.method === 'POST') {
+      const fromFolders = await inbox.scanFolders();
+      let fromNetlify = [], netlifyError = null;
+      if (inbox.netlifyConfigured()) { try { fromNetlify = await inbox.syncNetlify(); } catch (err) { netlifyError = err.message; } }
+      return send(res, 200, { imported: [...fromFolders, ...fromNetlify], netlifyError, status: inbox.status() });
+    }
     if (p === '/api/requests' && req.method === 'POST') {
       let json;
       try { json = JSON.parse(await readBody(req)); } catch { return send(res, 400, { error: 'Invalid JSON' }); }
       const items = Array.isArray(json) ? json : [json];
       const imported = [], errors = [];
       for (const raw of items) {
-        try { const r = normalizeRequest(raw); await saveRequest(r); imported.push(r.id); }
+        try { const r = await importRequest(raw, { source: 'upload' }); imported.push(r.id); }
         catch (err) { errors.push(err.message); }
       }
       return send(res, 200, { imported, errors });
@@ -331,6 +386,7 @@ const server = http.createServer(async (req, res) => {
         await fsp.rm(path.join(REQUESTS, `${id}.json`), { force: true });
         await fsp.rm(path.join(BUILDS, id), { recursive: true, force: true });
         await fsp.rm(path.join(BUSINESS, id), { recursive: true, force: true });
+        await fsp.rm(path.join(UPLOADS, id), { recursive: true, force: true });
         return send(res, 200, { ok: true });
       }
     }
@@ -360,6 +416,7 @@ const server = http.createServer(async (req, res) => {
     // Static: builds, survey, dashboard
     if (p.startsWith('/builds/')) return serveStatic(res, BUILDS, decodeURIComponent(p.slice('/builds/'.length)));
     if (p.startsWith('/business/')) return serveStatic(res, BUSINESS, decodeURIComponent(p.slice('/business/'.length)));
+    if (p.startsWith('/uploads/')) return serveStatic(res, UPLOADS, decodeURIComponent(p.slice('/uploads/'.length)));
     if (p === '/survey') { res.writeHead(302, { Location: '/survey/' }); return res.end(); }
     if (p.startsWith('/survey/')) return serveStatic(res, SURVEY, decodeURIComponent(p.slice('/survey/'.length)) || 'index.html');
     return serveStatic(res, PUBLIC, decodeURIComponent(p === '/' ? 'index.html' : p.slice(1)));
@@ -371,5 +428,6 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, '127.0.0.1', () => {
-  console.log(`\n  Website Studio dashboard\n  http://localhost:${PORT}\n  survey (local copy): http://localhost:${PORT}/survey/\n  Ollama: ${config.ollama.baseUrl} (${config.ollama.model})\n`);
+  inbox.start();
+  console.log(`\n  Website Studio dashboard\n  http://localhost:${PORT}\n  survey (local copy): http://localhost:${PORT}/survey/\n  Ollama: ${config.ollama.baseUrl} (${config.ollama.model})\n  Watching for survey files in: ${inbox.folders.join(', ')}\n  Netlify Forms inbox: ${inbox.netlifyConfigured() ? 'configured' : 'not configured'}\n`);
 });
