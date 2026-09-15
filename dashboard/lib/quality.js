@@ -193,6 +193,25 @@ function check(files, ctx) {
     if (!s[k] && re.test(html)) warnings.push(`links to ${k} although the client gave none`);
   }
 
+  // Invented testimonials: quotes in a reviews/testimonials section must come from provided reviews
+  const provided = (ctx.reviews || []).map(r => (r.text || '').toLowerCase().replace(/\s+/g, ' ').trim()).filter(Boolean);
+  const secRe = /<section\b[^>]*>([\s\S]*?)<\/section>/gi;
+  let sec, invented = 0;
+  while ((sec = secRe.exec(html))) {
+    const body = sec[1];
+    if (!/<h[1-3][^>]*>[^<]*(testimonial|review|clients? say|what people)/i.test(body)) continue;
+    const quotes = [];
+    for (const m of body.matchAll(/<(?:blockquote|q)\b[^>]*>([\s\S]*?)<\/(?:blockquote|q)>/gi)) quotes.push(stripTags(m[1]));
+    for (const m of stripTags(body).matchAll(/[\u201c"]([^\u201d"]{25,})[\u201d"]/g)) quotes.push(m[1]);
+    for (const q of [...new Set(quotes.map(x => x.toLowerCase().replace(/\s+/g, ' ').trim()))]) {
+      const t = q;
+      if (!t || /\[add /i.test(t)) continue;
+      const known = provided.some(p => p.includes(t.slice(0, 40)) || t.includes(p.slice(0, 40)));
+      if (!known) invented++;
+    }
+  }
+  if (invented) errors.push(`${invented} testimonial(s)/review(s) appear to be invented; only quote reviews the client provided, otherwise use "[Add testimonial]" placeholders`);
+
   // Booking intent
   const wantsBooking = /book|booking|appointment|reserve/i.test(req.website?.description || '');
   if (wantsBooking && !/mailto:/i.test(html)) errors.push('client asked for booking but there is no mailto link');
@@ -224,6 +243,8 @@ Client email: ${request.client?.email || ''}
 
 GENERATED PAGE OUTLINE
 ${outline(html)}
+
+Do not list testimonials, reviews, photos or prices as missing when the client did not supply them and the page shows a clearly marked "[Add ...]" placeholder instead; inventing them would be worse.
 
 Reply with JSON only, no prose: {"missing": ["short description of each missing or wrong item"]}
 Use an empty array if everything requested is present.`;

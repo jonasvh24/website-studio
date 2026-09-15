@@ -256,7 +256,7 @@ async function handleBuild(req, res, id) {
   const uploads = (request.files || []).filter(f => f.stored);
   const assets = [...(business?.photos || []).map(p => p.file), ...uploads.map(f => f.name)];
   const basePrompt = buildPrompt(request, feedback, business, uploads);
-  const ctx = { request, assets };
+  const ctx = { request, assets, reviews: business?.reviews || [] };
   let files, provider = 'template', model = 'built-in', warnings = [], report = null, attempts = 0, fixes = [], bestDir = null, screenshots = {};
 
   // One generation pass: model → parse → fill gaps → auto-fix → check

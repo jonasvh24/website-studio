@@ -132,6 +132,7 @@ CONTENT RULES
 - Use ALL the client's real information. Never invent a different name, email, phone, rating, review or address. Where information is missing write short realistic copy and mark it with "[Add ...]".
 - Only link to social profiles the client actually provided.
 - If BUSINESS DATA is present: show rating, address, phone and opening hours; quote the reviews verbatim as testimonials with author name and star rating; use the listed photos. Never invent reviews or photos.
+- If the client asks for testimonials or reviews but none are provided above, build the section with 3 clearly marked placeholder cards ("[Add testimonial]", "[Add name]"). Never write made-up quotes or customer names. Same for awards, client logos, statistics and press mentions: real data or a marked placeholder, nothing invented.
 - Write plain, direct copy. No em dashes, no exclamation marks, no emoji, no filler phrases like "passionate about", "crafted with care", "seamless", "elevate", "journey", "unlock". Short sentences. No lorem ipsum.
 - No frameworks, no external JS libraries, no CDN scripts, no external images or placeholder image services. Vanilla JS only. Google Fonts is the only external resource. Where a photo is missing use a styled div or inline SVG placeholder.
 - Mobile menu: when the nav is hidden or off-canvas it must not create horizontal scrolling (use display: none or transform inside an overflow-hidden container). The page must never scroll sideways at 390px width.
