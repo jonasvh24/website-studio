@@ -5,8 +5,8 @@
     "baseUrl": "http://localhost:11434",
     "model": "qwen2.5:14b",
     "temperature": 0.4,
-    "numCtx": 32768,
-    "maxTokens": 16000
+    "numCtx": 16384,
+    "maxTokens": 12000
   },
   "openaiCompatible": {
     "enabled": true,

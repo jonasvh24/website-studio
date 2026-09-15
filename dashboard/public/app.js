@@ -86,7 +86,7 @@
       }
       if (o.ok) {
         const pref = o.models.includes(o.preferred) ? o.preferred : o.models[0];
-        const note = (m) => /72b|70b/.test(m) ? ' (best local quality, about 25 min)' : /14b/.test(m) ? ' (about 5 min)' : /8b|7b/.test(m) ? ' (fast, lower quality)' : '';
+        const note = (m) => /72b|70b/.test(m) ? ' (very slow on this machine, 30 min or more)' : /14b/.test(m) ? ' (about 5 min)' : /8b|7b/.test(m) ? ' (fast, lower quality)' : '';
         opts.push(`<optgroup label="Ollama (local)">${o.models.map(m => `<option value="ollama:${esc(m)}" ${!k.ok && m === pref ? 'selected' : ''}>${esc(m)}${note(m)}</option>`).join('')}</optgroup>`);
       }
       sel.innerHTML = opts.join('') || '<option value="">Built-in template (no model)</option>';
