@@ -17,12 +17,16 @@ async function ollamaModels(base) {
   return (json.models || []).map(m => m.name);
 }
 
+const IDLE_MS = 90000;   // abort a stream that sends nothing for this long
+
 async function readNdjson(res, onLine) {
   const reader = res.body.getReader();
   const dec = new TextDecoder();
   let buf = '';
   for (;;) {
-    const { value, done } = await reader.read();
+    let timer;
+    const idle = new Promise((_, reject) => { timer = setTimeout(() => { reader.cancel().catch(() => {}); reject(new Error(`no data for ${IDLE_MS / 1000}s (connection stalled)`)); }, IDLE_MS); });
+    const { value, done } = await Promise.race([reader.read(), idle]).finally(() => clearTimeout(timer));
     if (done) break;
     buf += dec.decode(value, { stream: true });
     let nl;
@@ -35,7 +39,8 @@ async function readNdjson(res, onLine) {
   if (buf.trim()) onLine(buf.trim());
 }
 
-async function viaOllama(prompt, { ollama, onToken, onStatus, signal, modelOverride }) {
+async function viaOllama(prompt, opts) {
+  const { ollama, onStatus, signal, modelOverride } = opts;
   const base = ollama.baseUrl.replace(/\/$/, '');
   const available = await ollamaModels(base);
   if (!available.length) throw new Error('Ollama is running but has no models pulled.');
@@ -45,6 +50,21 @@ async function viaOllama(prompt, { ollama, onToken, onStatus, signal, modelOverr
   const model = available.includes(want) ? want
     : available.find(m => m.startsWith(want.split(':')[0])) || available[0];
 
+  // Cloud models depend on the network: retry once, then fall back to a local model if configured.
+  const isCloud = /cloud/.test(model);
+  const fallback = ollama.fallbackModel && available.includes(ollama.fallbackModel) && ollama.fallbackModel !== model ? ollama.fallbackModel : null;
+  const tries = isCloud ? [model, model, ...(fallback ? [fallback] : [])] : [model];
+  let lastErr;
+  for (let i = 0; i < tries.length; i++) {
+    const m = tries[i];
+    if (i > 0) onStatus?.(`${tries[i - 1]} failed (${lastErr.message}). ${m === tries[i - 1] ? 'Retrying.' : `Falling back to ${m}.`}`);
+    try { return await ollamaChat(base, m, prompt, opts); }
+    catch (err) { if (err.name === 'AbortError' || signal?.aborted) throw err; lastErr = err; }
+  }
+  throw lastErr;
+}
+
+async function ollamaChat(base, model, prompt, { ollama, onToken, onStatus, signal }) {
   onStatus?.(`Ollama: ${model}`);
 
   const res = await fetch(`${base}/api/chat`, {

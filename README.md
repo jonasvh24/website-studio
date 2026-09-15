@@ -48,6 +48,22 @@ On submit the page:
 
 The client sends you the JSON file (or you collect it however you like).
 
+### Payment (PayPal, one-time fee)
+
+The survey ends with a payment step: after the form validates, the customer sees a summary and PayPal buttons for a one-time fee (default 250.00 EUR). The request is only sent and downloaded once PayPal confirms the capture; the PayPal order and capture ids, payer email and amount are written into the JSON under `payment`.
+
+Setup: in `survey/config.js` set `payment.clientId` to the Client ID of a REST app from developer.paypal.com (Live). Use `sandbox: true` with a sandbox Client ID to test. With `enabled: false` the payment step is skipped and the button reads "Submit request".
+
+Until a Client ID is set, customers see "Online payment is not set up yet" and cannot complete the form.
+
+The dashboard shows Paid / Unpaid on every request. To verify a payment against PayPal's records (recommended: the JSON comes from the customer's browser), add the same app's Client ID and Secret to `dashboard/config.local.json`:
+
+```json
+{ "paypal": { "clientId": "...", "clientSecret": "...", "expectedAmount": "250.00", "expectedCurrency": "EUR" } }
+```
+
+Requests are then verified on import, and the Review step has a "Verify with PayPal" button.
+
 ### JSON shape
 
 ```json
@@ -129,6 +145,17 @@ or set `GOOGLE_PLACES_API_KEY` in the environment. Without a key the rest of the
 
 Google's terms require attribution when you show their reviews and photos; the photo author names are stored in `data/business/<id>/business.json` (`photos[].credit`) and reviews carry the author name.
 
+### Quality gate
+
+Every build goes through:
+
+1. **Auto-fix**: dashes, missing viewport/charset/links, external scripts and placeholder-image URLs, broken asset references, lorem ipsum, reduced-motion rule, overflow safety, and a reveal guard so content can never stay invisible if a scroll animation fails.
+2. **Static checks**: size, one h1, sections, client name and email present, valid JS, media queries, no invented social links, booking button when asked, and more.
+3. **Browser render** (when Chrome and `puppeteer-core` are available; run `npm install` in `dashboard/` once): desktop 1280px and mobile 390px, catching JavaScript errors, failed resources, horizontal scrolling and content that stays hidden. Full-page screenshots are saved with the build and shown in the Preview step.
+4. **Brief coverage**: a second model pass compares the page with the client's brief and lists anything requested that is missing.
+
+If any hard check fails or the brief is not covered, the model gets one corrected attempt with the exact list of problems. Truncated model output is regenerated before grading. The report (score, errors, warnings, missing items) is stored in `build.json` and shown in the build log.
+
 ### Models
 
 Order of preference: **Kimi** (Moonshot, cloud) if a key is configured, then **Ollama** (local), then the built-in template. Each build has a model picker on step 3.
@@ -141,7 +168,7 @@ To use Kimi, get a key at platform.moonshot.ai and add it to `dashboard/config.l
 
 With `"model": "auto"` (the default) the newest Kimi generation the API lists is used (K3 if available, otherwise K2.5, K2). Set an explicit model id to pin one.
 
-**Default: `gpt-oss:120b-cloud`.** This is an Ollama cloud model: it runs on ollama.com using the machine's `ollama signin` (free tier) and builds a site in about 15 seconds with much better quality than the local models. Kimi models (`kimi-k3:cloud`, `kimi-k2.7-code:cloud`) are also in Ollama's cloud catalogue but require a paid ollama.com plan or credits; once the account has them, pull with `ollama pull kimi-k3:cloud` and they appear in the picker.
+**Default: `gpt-oss:120b-cloud`** with `fallbackModel: qwen2.5:14b`: if the cloud model stalls (no data for 90 s) it is retried once and then the local model takes over, so a bad connection slows a build down but never breaks it. This is an Ollama cloud model: it runs on ollama.com using the machine's `ollama signin` (free tier) and builds a site in about 15 seconds with much better quality than the local models. Kimi models (`kimi-k3:cloud`, `kimi-k2.7-code:cloud`) are also in Ollama's cloud catalogue but require a paid ollama.com plan or credits; once the account has them, pull with `ollama pull kimi-k3:cloud` and they appear in the picker.
 
 Local models: `qwen2.5:14b` takes about 5 minutes per site; `qwen2.5:72b` is impractically slow on this machine (about 1 token per second).
 

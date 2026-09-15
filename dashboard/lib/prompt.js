@@ -124,7 +124,7 @@ DESIGN SYSTEM (follow exactly)
 - Spacing: sections padded 96px top and bottom on desktop, 64px on mobile. Content container max-width 1140px with 24px side padding. Consistent 8px spacing grid.
 - Components: sticky header with logo text and nav that collapses to a hamburger under 800px; buttons with hover and focus-visible states; cards with border, subtle shadow and hover lift; a footer with contact details, links and copyright.
 - Hero must have visual impact: large headline, supporting line, two buttons, and either a client photo, a business photo, or a CSS-only decorative shape. Never leave the hero as plain text on a plain background.
-- Motion: scroll-reveal via IntersectionObserver adding a class; respect prefers-reduced-motion.
+- Motion: scroll-reveal via IntersectionObserver that adds a class once (threshold 0.1, then unobserve) and never removes it. Content must be readable without JavaScript: only hide .reveal elements when <html class="js"> is set by script.js. Respect prefers-reduced-motion.
 - Accessibility: semantic landmarks, one h1, labelled controls, alt text, visible focus, contrast at least 4.5:1.
 - Responsive: mobile-first with breakpoints at 600px, 800px and 1100px. Nothing overflows horizontally.
 
@@ -133,7 +133,8 @@ CONTENT RULES
 - Only link to social profiles the client actually provided.
 - If BUSINESS DATA is present: show rating, address, phone and opening hours; quote the reviews verbatim as testimonials with author name and star rating; use the listed photos. Never invent reviews or photos.
 - Write plain, direct copy. No em dashes, no exclamation marks, no emoji, no filler phrases like "passionate about", "crafted with care", "seamless", "elevate", "journey", "unlock". Short sentences. No lorem ipsum.
-- No frameworks, no external JS libraries, no CDN scripts. Vanilla JS only. Google Fonts is the only external resource.
+- No frameworks, no external JS libraries, no CDN scripts, no external images or placeholder image services. Vanilla JS only. Google Fonts is the only external resource. Where a photo is missing use a styled div or inline SVG placeholder.
+- Mobile menu: when the nav is hidden or off-canvas it must not create horizontal scrolling (use display: none or transform inside an overflow-hidden container). The page must never scroll sideways at 390px width.
 
 SIZE
 - styles.css should be substantial (roughly 350 to 600 lines) and complete. index.html should contain real sections with real content (roughly 200 to 350 lines). script.js handles nav toggle, smooth scrolling, scroll reveal, footer year, and any small interactions (FAQ toggles, gallery lightbox if there are photos).
@@ -180,7 +181,8 @@ function parseOutput(text) {
   }
 
   const missing = FILES.filter(f => !files[f]);
-  return { files, missing };
+  const complete = /===\s*END\s*===/i.test(text) && missing.length === 0;
+  return { files, missing, complete };
 }
 
 function stripFences(s) {

@@ -1,0 +1,10 @@
+{
+  "name": "website-studio-dashboard",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local dashboard: imports survey requests, builds websites with a local or cloud model, packages them as ZIP.",
+  "scripts": { "start": "node server.js" },
+  "optionalDependencies": {
+    "puppeteer-core": "^23.0.0"
+  }
+}

@@ -6,7 +6,8 @@
     "model": "gpt-oss:120b-cloud",
     "temperature": 0.4,
     "numCtx": 16384,
-    "maxTokens": 12000
+    "maxTokens": 12000,
+    "fallbackModel": "qwen2.5:14b"
   },
   "openaiCompatible": {
     "enabled": true,

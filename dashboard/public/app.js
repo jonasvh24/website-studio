@@ -514,6 +514,12 @@
       const b = done.build;
       log(`Done in ${(b.durationMs / 1000).toFixed(1)}s via ${b.provider} (${b.model}). Saved as version ${b.version}`, 'ok');
       b.warnings?.forEach(w => log(w, 'warn'));
+      if (b.quality) {
+        log(`Quality score ${b.quality.score}/100 after ${b.attempts || 1} attempt(s)`, b.quality.ok ? 'ok' : 'warn');
+        b.quality.errors?.forEach(e => log(`Error: ${e}`, 'warn'));
+        b.quality.warnings?.forEach(w => log(`Warning: ${w}`));
+        b.quality.missing?.forEach(m => log(`Not covered from the brief: ${m}`, 'warn'));
+      }
 
       state.current = await api(`/api/requests/${state.current.id}`);
       state.version = b.version;
@@ -540,12 +546,19 @@
     const r = state.current;
     const sel = $('#versionSelect');
     sel.innerHTML = r.builds.map(b =>
-      `<option value="${b.version}">v${b.version} (${b.provider}${b.feedback ? ', rebuild' : ''})</option>`).join('');
+      `<option value="${b.version}">v${b.version} (${b.model || b.provider}${b.feedback ? ', rebuild' : ''}${b.quality ? `, ${b.quality.score}/100` : ''})</option>`).join('');
     sel.value = String(state.version);
     const b = r.builds.find(x => x.version === state.version);
     $('#previewSub').textContent = `${r.client.fullName}. Version ${b.version} of ${r.builds.length}. Built ${fmtDate(b.createdAt)}`;
-    $('#previewMeta').textContent = `${b.provider} / ${b.model}, ${Object.values(b.sizes || {}).reduce((a, n) => a + n, 0).toLocaleString()} bytes`;
+    $('#previewMeta').textContent = `${b.provider} / ${b.model}, ${Object.values(b.sizes || {}).reduce((a, n) => a + n, 0).toLocaleString()} bytes${b.quality ? `, quality ${b.quality.score}/100` : ''}`;
     const url = previewUrl();
+    const sh = $('#shots');
+    if (b.screenshots && (b.screenshots.desktop || b.screenshots.mobile)) {
+      sh.hidden = false;
+      const base = `/builds/${r.id}/v${state.version}/`;
+      sh.innerHTML = ['desktop', 'mobile'].filter(k => b.screenshots[k]).map(k =>
+        `<a class="shot" href="${base}${b.screenshots[k]}" target="_blank" rel="noopener"><img src="${base}${b.screenshots[k]}?t=${Date.now()}" alt="${k} screenshot"><div class="cap">${k === 'desktop' ? 'Desktop 1280px' : 'Mobile 390px'}, full page. Click to open.</div></a>`).join('');
+    } else { sh.hidden = true; sh.innerHTML = ''; }
     $('#previewUrl').textContent = location.origin + url;
     $('#openTabBtn').href = url;
     $('#previewFrame').src = url + '?t=' + Date.now();

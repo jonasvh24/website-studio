@@ -34,6 +34,8 @@ const llm = require('./lib/llm');
 const places = require('./lib/places');
 const { Inbox } = require('./lib/inbox');
 const paypal = require('./lib/paypal');
+const quality = require('./lib/quality');
+const { browserCheck, isAvailable: browserAvailable } = require('./lib/browsercheck');
 
 const ROOT = __dirname;
 const PUBLIC = path.join(ROOT, 'public');
@@ -214,6 +216,18 @@ async function attachBusiness(id, placeId) {
   return data;
 }
 
+// Write site files plus assets (business photos, client uploads) into a directory.
+async function materialize(dir, files, id, business, uploads) {
+  await fsp.rm(dir, { recursive: true, force: true });
+  await fsp.mkdir(dir, { recursive: true });
+  for (const [name, content] of Object.entries(files)) await fsp.writeFile(path.join(dir, name), content);
+  if (business?.photos?.length || uploads.length) {
+    await fsp.mkdir(path.join(dir, 'assets'), { recursive: true });
+    for (const ph of (business?.photos || [])) await fsp.copyFile(path.join(bizPhotoDir(id), ph.file), path.join(dir, 'assets', ph.file)).catch(() => {});
+    for (const f of uploads) await fsp.copyFile(path.join(UPLOADS, id, f.name), path.join(dir, 'assets', f.name)).catch(() => {});
+  }
+}
+
 // ── build (SSE) ─────────────────────────────────────────────────────
 const activeBuilds = new Map(); // id → AbortController
 
@@ -240,35 +254,99 @@ async function handleBuild(req, res, id) {
   const started = Date.now();
   const business = request.business?.usePublicData === false ? null : await getBusiness(id);
   const uploads = (request.files || []).filter(f => f.stored);
-  const prompt = buildPrompt(request, feedback, business, uploads);
-  let files, provider = 'template', model = 'built-in', warnings = [];
+  const assets = [...(business?.photos || []).map(p => p.file), ...uploads.map(f => f.name)];
+  const basePrompt = buildPrompt(request, feedback, business, uploads);
+  const ctx = { request, assets };
+  let files, provider = 'template', model = 'built-in', warnings = [], report = null, attempts = 0, fixes = [], bestDir = null, screenshots = {};
 
-  try {
-    emit('status', { message: 'Contacting local model' });
-    const { text, provider: p, model: m } = await llm.generate(prompt, {
+  // One generation pass: model → parse → fill gaps → auto-fix → check
+  const generateOnce = async (promptText) => {
+    attempts++;
+    const { text, provider: p, model: m } = await llm.generate(promptText, {
       config, modelOverride,
       signal: ac.signal,
       onStatus: (message) => emit('status', { message }),
       onToken: (_t, total) => emit('progress', { chars: total })
     });
-    provider = p; model = m;
-
     emit('status', { message: 'Parsing generated files' });
-    const parsed = parseOutput(text);
-    files = parsed.files;
+    let parsed = parseOutput(text);
+    let fullText = text;
+    // Truncated stream (no END marker or files missing): regenerate before grading, up to 2 extra tries
+    for (let tries = 0; !parsed.complete && tries < 2 && !ac.signal.aborted; tries++) {
+      emit('status', { message: `Output was incomplete (${parsed.missing.length ? 'missing ' + parsed.missing.join(', ') : 'no end marker'}). Regenerating.` });
+      const again = await llm.generate(promptText, { config, modelOverride, signal: ac.signal, onStatus: (message) => emit('status', { message }), onToken: (_t, total) => emit('progress', { chars: total }) });
+      const p2 = parseOutput(again.text);
+      if (p2.complete || Object.keys(p2.files).length > Object.keys(parsed.files).length) { parsed = p2; fullText = again.text; }
+    }
+    let out = parsed.files;
+    const w = [];
     if (parsed.missing.length) {
       const fallback = generateSite(request, business, uploads);
-      for (const f of parsed.missing) files[f] = fallback[f];
-      warnings.push(`Model did not return ${parsed.missing.join(', ')}; filled from template.`);
+      for (const f of parsed.missing) out[f] = fallback[f];
+      w.push(`Model did not return ${parsed.missing.join(', ')}; filled from template.`);
     }
-    // Keep only the 3 known files (ignore hallucinated extras)
-    files = Object.fromEntries(FILES.map(f => [f, files[f]]));
-    await fsp.writeFile(path.join(BUILDS, id, 'last-raw-output.txt'), text).catch(() => {});
+    out = Object.fromEntries(FILES.map(f => [f, out[f]]));
+    await fsp.writeFile(path.join(BUILDS, id, `last-raw-output-${attempts}.txt`), fullText).catch(() => {});
+    const fixed = quality.autoFix(out, ctx);
+    const rep = quality.check(fixed.files, ctx);
+    // Render in a real browser (desktop + mobile) when Chrome is available
+    const attemptDir = path.join(BUILDS, id, `.attempt-${attempts}`);
+    await materialize(attemptDir, fixed.files, id, business, uploads);
+    let shots = {};
+    if (browserAvailable()) {
+      emit('status', { message: 'Rendering in Chrome (desktop and mobile)' });
+      try {
+        const br = await browserCheck(attemptDir);
+        rep.errors.push(...br.errors);
+        rep.warnings.push(...br.warnings);
+        rep.ok = rep.ok && br.errors.length === 0;
+        rep.score = Math.max(0, rep.score - br.errors.length * 15 - br.warnings.length * 4);
+        shots = br.screenshots;
+      } catch (err) { rep.warnings.push(`Browser check failed: ${err.message}`); }
+    }
+    // Brief coverage: a short second pass listing requested items the page lacks
+    let missing = [];
+    try {
+      emit('status', { message: 'Reviewing the page against the brief' });
+      const review = await llm.generate(quality.coveragePrompt(request, fixed.files['index.html']), { config, modelOverride, signal: ac.signal, onToken: () => {}, onStatus: () => {} });
+      missing = quality.parseCoverage(review.text);
+    } catch (err) { if (ac.signal.aborted) throw err; }
+    rep.missing = missing;
+    rep.score = Math.max(0, rep.score - missing.length * 8);
+    rep.ok = rep.ok && missing.length === 0;
+    return { files: fixed.files, provider: p, model: m, warnings: w, fixes: fixed.fixes, report: rep, dir: attemptDir, screenshots: shots };
+  };
+
+  try {
+    emit('status', { message: 'Contacting model' });
+    await fsp.mkdir(path.join(BUILDS, id), { recursive: true });
+    let best = await generateOnce(basePrompt);
+    emit('status', { message: `Quality check: ${best.report.score}/100, ${best.report.errors.length} error(s), ${best.report.warnings.length} warning(s), ${best.report.missing.length} item(s) missing from the brief` });
+
+    // One retry if hard checks failed or the brief is not fully covered.
+    if (!best.report.ok && !ac.signal.aborted) {
+      emit('status', { message: 'Asking the model for a corrected version.' });
+      const issues = [...best.report.errors.map(e => `- ${e}`), ...best.report.missing.map(m => `- Missing from the brief: ${m}`)];
+      const retryPrompt = basePrompt + `\n\nYOUR PREVIOUS ATTEMPT HAD THESE PROBLEMS. Fix every one of them, keep everything else that was good, and output the complete three files again:\n${issues.join('\n')}\n`;
+      try {
+        const second = await generateOnce(retryPrompt);
+        emit('status', { message: `Retry quality check: ${second.report.score}/100, ${second.report.errors.length} error(s), ${second.report.missing.length} missing` });
+        if (second.report.score >= best.report.score) best = second;
+      } catch (err) {
+        if (ac.signal.aborted) throw err;
+        emit('status', { message: `Retry failed (${err.message}). Keeping first version.` });
+      }
+    }
+    ({ files, provider, model, warnings, fixes, report, dir: bestDir, screenshots } = best);
+    if (fixes.length) warnings.push(`Auto-fixed: ${fixes.join('; ')}.`);
   } catch (err) {
     if (ac.signal.aborted) { clearInterval(ping); return res.end(); }
     if (!err.noModel) console.error('[build]', err);
     emit('status', { message: `${err.message}. Using the built-in template generator.` });
     files = generateSite(request, business, uploads);
+    const fixed = quality.autoFix(files, ctx);
+    files = fixed.files;
+    report = quality.check(files, ctx);
     warnings.push(`No model output (${err.message}). Built with the template generator instead.`);
   }
 
@@ -276,22 +354,20 @@ async function handleBuild(req, res, id) {
   const versions = await listBuilds(id);
   const version = (versions.at(-1)?.version || 0) + 1;
   const dir = path.join(BUILDS, id, `v${version}`);
-  await fsp.mkdir(dir, { recursive: true });
-  for (const [name, content] of Object.entries(files)) await fsp.writeFile(path.join(dir, name), content);
-  if (business?.photos?.length || uploads.length) {
-    await fsp.mkdir(path.join(dir, 'assets'), { recursive: true });
-    for (const ph of (business?.photos || [])) {
-      await fsp.copyFile(path.join(bizPhotoDir(id), ph.file), path.join(dir, 'assets', ph.file)).catch(() => {});
-    }
-    for (const f of uploads) {
-      await fsp.copyFile(path.join(UPLOADS, id, f.name), path.join(dir, 'assets', f.name)).catch(() => {});
-    }
+  if (bestDir) await fsp.rename(bestDir, dir);
+  else await materialize(dir, files, id, business, uploads);
+  // Clean up other attempts
+  for (const n of await fsp.readdir(path.join(BUILDS, id)).catch(() => [])) {
+    if (n.startsWith('.attempt-')) await fsp.rm(path.join(BUILDS, id, n), { recursive: true, force: true });
   }
 
   const meta = {
     version, provider, model, feedback, warnings,
     business: business ? { name: business.name, rating: business.rating, reviews: business.reviews.length, photos: business.photos.length } : null,
     uploads: uploads.length,
+    attempts,
+    quality: report,
+    screenshots,
     createdAt: new Date().toISOString(),
     durationMs: Date.now() - started,
     sizes: Object.fromEntries(Object.entries(files).map(([k, v]) => [k, Buffer.byteLength(v)]))
