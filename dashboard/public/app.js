@@ -86,8 +86,8 @@
       }
       if (o.ok) {
         const pref = o.models.includes(o.preferred) ? o.preferred : o.models[0];
-        const note = (m) => /72b|70b/.test(m) ? ' (very slow on this machine, 30 min or more)' : /14b/.test(m) ? ' (about 5 min)' : /8b|7b/.test(m) ? ' (fast, lower quality)' : '';
-        opts.push(`<optgroup label="Ollama (local)">${o.models.map(m => `<option value="ollama:${esc(m)}" ${!k.ok && m === pref ? 'selected' : ''}>${esc(m)}${note(m)}</option>`).join('')}</optgroup>`);
+        const note = (m) => /cloud/.test(m) ? ' (Ollama cloud, under a minute)' : /72b|70b/.test(m) ? ' (very slow on this machine, 30 min or more)' : /14b/.test(m) ? ' (local, about 5 min)' : /8b|7b/.test(m) ? ' (local, fast, lower quality)' : '';
+        opts.push(`<optgroup label="Ollama">${o.models.map(m => `<option value="ollama:${esc(m)}" ${!k.ok && m === pref ? 'selected' : ''}>${esc(m)}${note(m)}</option>`).join('')}</optgroup>`);
       }
       sel.innerHTML = opts.join('') || '<option value="">Built-in template (no model)</option>';
 
@@ -97,7 +97,7 @@
       } else if (o.ok) {
         const pref = o.models.includes(o.preferred) ? o.preferred : o.models[0];
         dot.className = 'status-dot ok'; txt.textContent = `Ollama: ${pref}`;
-        $('#modelLine').textContent = k.hasKey ? `${k.label} key set but unreachable (${k.error || 'error'}). Using Ollama.` : `Local model. Add a Kimi API key in config.local.json to use Kimi.`;
+        $('#modelLine').textContent = k.hasKey ? `${k.label} key set but unreachable (${k.error || 'error'}). Using Ollama.` : (/cloud/.test(pref) ? `${pref} runs on Ollama's servers using your ollama.com sign-in.` : 'Local model.');
       } else {
         dot.className = 'status-dot warn'; txt.textContent = 'No model. Template mode';
         $('#modelLine').textContent = 'No model reachable. Builds will use the built-in template generator. Start Ollama or add a Kimi API key.';

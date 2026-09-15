@@ -141,7 +141,9 @@ To use Kimi, get a key at platform.moonshot.ai and add it to `dashboard/config.l
 
 With `"model": "auto"` (the default) the newest Kimi generation the API lists is used (K3 if available, otherwise K2.5, K2). Set an explicit model id to pin one.
 
-Local models: `qwen2.5:14b` takes about 5 minutes per site; `qwen2.5:72b` gives better results but about 25 minutes.
+**Default: `gpt-oss:120b-cloud`.** This is an Ollama cloud model: it runs on ollama.com using the machine's `ollama signin` (free tier) and builds a site in about 15 seconds with much better quality than the local models. Kimi models (`kimi-k3:cloud`, `kimi-k2.7-code:cloud`) are also in Ollama's cloud catalogue but require a paid ollama.com plan or credits; once the account has them, pull with `ollama pull kimi-k3:cloud` and they appear in the picker.
+
+Local models: `qwen2.5:14b` takes about 5 minutes per site; `qwen2.5:72b` is impractically slow on this machine (about 1 token per second).
 
 Edit `dashboard/config.json` (or override in `config.local.json`):
 
