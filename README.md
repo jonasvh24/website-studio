@@ -32,7 +32,9 @@ website-studio/
 
 ## Part 1 — Survey
 
-Open `survey/index.html` directly, or deploy the `survey/` folder to Netlify / Vercel / GitHub Pages / any static host.
+**Live:** <https://jonasvh24.github.io/website-studio/> (auto-deployed from `survey/` on every push to `main` via `.github/workflows/pages.yml`).
+
+You can also open `survey/index.html` directly, or deploy the `survey/` folder to Netlify / Vercel / any static host.
 
 On submit the page:
 - validates name, email and description,
